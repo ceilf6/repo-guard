@@ -138,6 +138,21 @@ If you use a relay service (中转站) for API access, set `LLM_BASE_URL` to you
 
 The bot automatically normalizes the URL for the selected provider.
 
+## Relationship with ceilf6-skills
+
+本仓库是 **执行层**，[ceilf6/ceilf6-skills](https://github.com/ceilf6/ceilf6-skills) 是 **知识层**。
+
+| 仓库 | 职责 |
+|------|------|
+| `ceilf6/repo-guard` | GitHub Action 运行时：事件监听、数据获取、LLM 调用、评论发布、去重 |
+| `ceilf6/ceilf6-skills` | 评审知识：system prompt、评审标准、分析框架、评分规则 |
+
+repo-guard 通过 git submodule 引用 ceilf6-skills，运行时始终拉取最新版 skill。更新评审逻辑只需修改 ceilf6-skills 中的 skill 文件，无需改动 repo-guard 代码。
+
+使用的 skill：
+- [`code-reviewer`](https://github.com/ceilf6/ceilf6-skills/tree/main/code-reviewer) — PR 代码评审（级联分析 + Karpathy 审查标准）
+- [`issue-reviewer`](https://github.com/ceilf6/ceilf6-skills/tree/main/issue-reviewer) — Issue 质量评估（完整性、清晰度、可操作性）
+
 ## License
 
 MIT
