@@ -71,12 +71,14 @@ export function buildPRUserMessage(prInfo, files) {
   const sorted = [...files].sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions));
 
   let includedCount = 0;
+  let omittedCount = 0;
 
   for (const file of sorted) {
     const entry = `\n### ${file.filename} (${file.status}, +${file.additions} -${file.deletions})\n\`\`\`diff\n${file.patch}\n\`\`\`\n`;
     if (totalSize + entry.length > MAX_DIFF_SIZE) {
       truncated = true;
-      break;
+      omittedCount++;
+      continue;
     }
     diffText += entry;
     totalSize += entry.length;
@@ -96,8 +98,7 @@ export function buildPRUserMessage(prInfo, files) {
   message += `## Diff\n${diffText}`;
 
   if (truncated) {
-    const omitted = files.length - includedCount;
-    message += `\n\n> ⚠️ Diff truncated (exceeded ${MAX_DIFF_SIZE / 1024}KB). ${omitted} file(s) omitted. Review focused on largest changes.`;
+    message += `\n\n> ⚠️ Diff truncated (exceeded ${MAX_DIFF_SIZE / 1024}KB). ${omittedCount} file(s) omitted. Review focused on largest changes that fit.`;
   }
 
   return message;
