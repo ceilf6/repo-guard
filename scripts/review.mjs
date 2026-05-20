@@ -89,6 +89,14 @@ function isTriggeredByComment() {
   return TRIGGER_PATTERNS.some((pattern) => pattern.test(config.commentBody));
 }
 
+function extractUserPrompt() {
+  const cleaned = config.commentBody
+    .replace(/@repo-guard/gi, '')
+    .replace(/\/review/gi, '')
+    .trim();
+  return cleaned || '';
+}
+
 async function reviewPR() {
   const prNumber = parseInt(config.prNumber, 10);
   console.log(`Fetching PR #${prNumber}...`);
@@ -98,8 +106,15 @@ async function reviewPR() {
     fetchPRDiff(config.repo, prNumber, config.githubToken),
   ]);
 
-  const systemPrompt = loadSystemPrompt('pr', config.language, config.extraInstructions);
+  const userPrompt = extractUserPrompt();
+  const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
+  const systemPrompt = loadSystemPrompt('pr', config.language, extra);
   const userMessage = buildPRUserMessage(prInfo, files);
+
+  const messages = [{ role: 'user', content: userMessage }];
+  if (userPrompt) {
+    messages.push({ role: 'user', content: `User request: ${userPrompt}` });
+  }
 
   console.log(`Calling LLM (${files.length} files, ${prInfo.additions + prInfo.deletions} lines changed)...`);
 
@@ -110,7 +125,7 @@ async function reviewPR() {
     baseURL: config.baseURL,
     maxTokens: config.maxTokens,
     system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
+    messages,
   });
 
   const recommendation = extractRecommendation(response);
@@ -134,8 +149,15 @@ async function reviewIssue() {
   console.log(`Fetching Issue #${issueNumber}...`);
 
   const issue = await fetchIssue(config.repo, issueNumber, config.githubToken);
-  const systemPrompt = loadSystemPrompt('issue', config.language, config.extraInstructions);
+  const userPrompt = extractUserPrompt();
+  const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
+  const systemPrompt = loadSystemPrompt('issue', config.language, extra);
   const userMessage = buildIssueUserMessage(issue);
+
+  const messages = [{ role: 'user', content: userMessage }];
+  if (userPrompt) {
+    messages.push({ role: 'user', content: `User request: ${userPrompt}` });
+  }
 
   console.log('Calling LLM...');
 
@@ -146,7 +168,7 @@ async function reviewIssue() {
     baseURL: config.baseURL,
     maxTokens: config.maxTokens,
     system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
+    messages,
   });
 
   await postComment(config.repo, issueNumber, response, config.githubToken);
