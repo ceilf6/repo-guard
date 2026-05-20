@@ -104,17 +104,27 @@ jobs:
 
 ## How It Works
 
+### Architecture
+
+Review prompts are sourced from [ceilf6/ceilf6-skills](https://github.com/ceilf6/ceilf6-skills) via git submodule:
+- PR review uses the `code-reviewer` skill (cascade analysis + Karpathy review standard)
+- Issue review uses the `issue-reviewer` skill (completeness, clarity, actionability scoring)
+
+At runtime, the action clones the skills repo and assembles the system prompt from `SKILL.md` + all `references/*.md` files.
+
 ### PR Review
-1. Fetches PR diff and metadata via GitHub API
-2. Truncates large diffs (>100KB) to focus on largest changes
-3. Sends to LLM with code review system prompt (cascade analysis + Karpathy standard)
-4. Extracts recommendation (APPROVE / COMMENT / REQUEST_CHANGES)
-5. Extracts inline findings and posts as PR review with line comments
+1. Initializes skills from `ceilf6/ceilf6-skills` submodule
+2. Fetches PR diff and metadata via GitHub API
+3. Truncates large diffs (>100KB) to focus on largest changes
+4. Assembles system prompt from `code-reviewer` skill
+5. Sends to LLM, extracts recommendation (APPROVE / COMMENT / REQUEST_CHANGES)
+6. Extracts inline findings and posts as PR review with line comments
 
 ### Issue Review
-1. Fetches issue title, body, and labels
-2. Sends to LLM with issue analysis system prompt
-3. Posts structured quality assessment as a comment
+1. Initializes skills from `ceilf6/ceilf6-skills` submodule
+2. Fetches issue title, body, and labels
+3. Assembles system prompt from `issue-reviewer` skill
+4. Sends to LLM, posts structured quality assessment as a comment
 
 ### Deduplication
 Bot comments include a hidden marker (`<!-- repo-guard:v1 -->`). On subsequent runs (e.g., PR update), the bot edits its existing comment instead of creating a new one.

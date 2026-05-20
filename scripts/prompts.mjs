@@ -1,14 +1,54 @@
 // @ts-check
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPTS_DIR = join(__dirname, '..', 'prompts');
+const SKILLS_DIR = join(__dirname, '..', 'skills');
+const FALLBACK_PROMPTS_DIR = join(__dirname, '..', 'prompts');
+
+function readSkillPrompt(skillName) {
+  const skillDir = join(SKILLS_DIR, skillName);
+  if (!existsSync(skillDir)) {
+    throw new Error(`Skill not found: ${skillName}. Ensure submodule is initialized.`);
+  }
+
+  let prompt = readFileSync(join(skillDir, 'SKILL.md'), 'utf-8');
+
+  const refsDir = join(skillDir, 'references');
+  if (existsSync(refsDir)) {
+    const refPattern = /\[references\/([^\]]+)\]/g;
+    const refs = [...prompt.matchAll(refPattern)].map((m) => m[1]);
+    for (const ref of refs) {
+      const refPath = join(refsDir, ref);
+      if (existsSync(refPath)) {
+        const content = readFileSync(refPath, 'utf-8');
+        prompt += `\n\n---\n\n${content}`;
+      }
+    }
+    // Also load any references not explicitly linked in SKILL.md
+    for (const file of readdirSync(refsDir)) {
+      if (file.endsWith('.md') && !refs.includes(file)) {
+        const content = readFileSync(join(refsDir, file), 'utf-8');
+        prompt += `\n\n---\n\n${content}`;
+      }
+    }
+  }
+
+  return prompt;
+}
 
 export function loadSystemPrompt(type, language, extraInstructions) {
-  const filename = type === 'pr' ? 'pr-system.md' : 'issue-system.md';
-  let prompt = readFileSync(join(PROMPTS_DIR, filename), 'utf-8');
+  let prompt;
+
+  if (existsSync(SKILLS_DIR)) {
+    const skillName = type === 'pr' ? 'code-reviewer' : 'issue-reviewer';
+    prompt = readSkillPrompt(skillName);
+  } else {
+    // Fallback to embedded prompts if submodule not available
+    const filename = type === 'pr' ? 'pr-system.md' : 'issue-system.md';
+    prompt = readFileSync(join(FALLBACK_PROMPTS_DIR, filename), 'utf-8');
+  }
 
   if (language === 'zh') {
     prompt += '\n\n## Language Instruction\nRespond in Chinese (简体中文). Use Chinese for all analysis, findings, and suggestions.';

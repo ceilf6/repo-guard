@@ -44,6 +44,14 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Initialize skills submodule
+      shell: bash
+      run: |
+        SKILLS_DIR="${{ github.action_path }}/skills"
+        if [ ! -d "$SKILLS_DIR/code-reviewer" ]; then
+          rm -rf "$SKILLS_DIR"
+          git clone --depth 1 https://github.com/ceilf6/ceilf6-skills.git "$SKILLS_DIR"
+        fi
     - name: Run review
       shell: bash
       env:
