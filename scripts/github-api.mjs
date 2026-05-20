@@ -1,6 +1,7 @@
 // @ts-check
 
 const GITHUB_API = 'https://api.github.com';
+const PAGE_SIZE = 100;
 const HEADER = '> 🛡️ [ceilf6/repo-guard](https://github.com/ceilf6/repo-guard)\n\n';
 
 function headers(token) {
@@ -9,6 +10,28 @@ function headers(token) {
     Authorization: `Bearer ${token}`,
     'X-GitHub-Api-Version': '2022-11-28',
   };
+}
+
+async function fetchAllPages(url, token, description) {
+  const items = [];
+  let page = 1;
+
+  while (true) {
+    const separator = url.includes('?') ? '&' : '?';
+    const pagedURL = `${url}${separator}per_page=${PAGE_SIZE}&page=${page}`;
+    const res = await fetch(pagedURL, {
+      headers: headers(token),
+    });
+    if (!res.ok) throw new Error(`Failed to fetch ${description}: ${res.status}`);
+
+    const pageItems = await res.json();
+    items.push(...pageItems);
+
+    if (pageItems.length < PAGE_SIZE) break;
+    page++;
+  }
+
+  return items;
 }
 
 export async function fetchPRInfo(repo, prNumber, token) {
@@ -30,11 +53,7 @@ export async function fetchPRInfo(repo, prNumber, token) {
 }
 
 export async function fetchPRDiff(repo, prNumber, token) {
-  const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}/files`, {
-    headers: headers(token),
-  });
-  if (!res.ok) throw new Error(`Failed to fetch PR files: ${res.status}`);
-  const files = await res.json();
+  const files = await fetchAllPages(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}/files`, token, 'PR files');
   return files.map((f) => ({
     filename: f.filename,
     status: f.status,
