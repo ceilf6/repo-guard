@@ -1,0 +1,64 @@
+name: "Repo Guard"
+description: "AI-powered review bot for GitHub Issues and Pull Requests. Supports OpenAI and Anthropic APIs with custom relay/proxy."
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  type:
+    description: "Review type: 'pr', 'issue', or 'both' (auto-detect from event)"
+    required: false
+    default: "both"
+  provider:
+    description: "LLM provider: 'openai' or 'anthropic'"
+    required: false
+    default: "openai"
+  model:
+    description: "Model name (e.g., gpt-4o, claude-sonnet-4-20250514)"
+    required: false
+    default: "gpt-4o"
+  api-key:
+    description: "API key for the LLM provider"
+    required: true
+  base-url:
+    description: "Custom API base URL for relay/proxy service"
+    required: false
+    default: ""
+  max-tokens:
+    description: "Max tokens for LLM response"
+    required: false
+    default: "4096"
+  github-token:
+    description: "GitHub token for posting comments"
+    required: false
+    default: ${{ github.token }}
+  language:
+    description: "Response language: 'en' or 'zh'"
+    required: false
+    default: "en"
+  extra-instructions:
+    description: "Additional instructions appended to the system prompt"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Run review
+      shell: bash
+      env:
+        REVIEW_TYPE: ${{ inputs.type }}
+        LLM_PROVIDER: ${{ inputs.provider }}
+        LLM_MODEL: ${{ inputs.model }}
+        LLM_API_KEY: ${{ inputs.api-key }}
+        LLM_BASE_URL: ${{ inputs.base-url }}
+        LLM_MAX_TOKENS: ${{ inputs.max-tokens }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        REVIEW_LANGUAGE: ${{ inputs.language }}
+        EXTRA_INSTRUCTIONS: ${{ inputs.extra-instructions }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        REPO_FULL_NAME: ${{ github.repository }}
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_ACTION: ${{ github.event.action }}
+      run: node "${{ github.action_path }}/scripts/review.mjs"
