@@ -69,4 +69,7 @@ runs:
         REPO_FULL_NAME: ${{ github.repository }}
         EVENT_NAME: ${{ github.event_name }}
         EVENT_ACTION: ${{ github.event.action }}
+        COMMENT_BODY: ${{ github.event.comment.body }}
+        COMMENT_USER: ${{ github.event.comment.user.login }}
+        IS_PULL_REQUEST: ${{ github.event.issue.pull_request && 'true' || 'false' }}
       run: node "${{ github.action_path }}/scripts/review.mjs"

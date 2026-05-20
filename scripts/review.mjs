@@ -5,6 +5,8 @@ import { loadSystemPrompt, buildPRUserMessage, buildIssueUserMessage } from './p
 
 const env = process.env;
 
+const TRIGGER_PATTERNS = [/@repo-guard/i, /\/review/i];
+
 const config = {
   type: env.REVIEW_TYPE || 'both',
   provider: env.LLM_PROVIDER || 'openai',
@@ -20,6 +22,9 @@ const config = {
   repo: env.REPO_FULL_NAME,
   eventAction: env.EVENT_ACTION,
   eventName: env.EVENT_NAME,
+  commentBody: env.COMMENT_BODY || '',
+  commentUser: env.COMMENT_USER || '',
+  isPullRequest: env.IS_PULL_REQUEST === 'true',
 };
 
 async function main() {
@@ -30,6 +35,19 @@ async function main() {
   if (!config.githubToken) {
     console.error('Error: GITHUB_TOKEN is required');
     process.exit(1);
+  }
+
+  // For comment-triggered events, check if the comment matches trigger patterns
+  if (config.eventName === 'issue_comment') {
+    if (!isTriggeredByComment()) {
+      console.log('Comment does not contain trigger keyword. Skipping.');
+      return;
+    }
+    // Prevent infinite loop: skip if comment is from the bot itself
+    if (config.commentBody.includes('<!-- repo-guard:v1 -->')) {
+      console.log('Ignoring bot\'s own comment. Skipping.');
+      return;
+    }
   }
 
   const reviewType = resolveReviewType();
@@ -56,10 +74,19 @@ function resolveReviewType() {
   // type === 'both': auto-detect from event
   if (config.eventName === 'pull_request' && config.prNumber) return 'pr';
   if (config.eventName === 'issues' && config.issueNumber) return 'issue';
+  // issue_comment: determine if it's on a PR or issue
+  if (config.eventName === 'issue_comment') {
+    if (config.isPullRequest && config.issueNumber) return 'pr';
+    if (config.issueNumber) return 'issue';
+  }
   // Fallback: check which number is available
   if (config.prNumber) return 'pr';
   if (config.issueNumber) return 'issue';
   return null;
+}
+
+function isTriggeredByComment() {
+  return TRIGGER_PATTERNS.some((pattern) => pattern.test(config.commentBody));
 }
 
 async function reviewPR() {
