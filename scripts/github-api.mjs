@@ -1,7 +1,6 @@
 // @ts-check
 
 const GITHUB_API = 'https://api.github.com';
-const BOT_MARKER = '<!-- repo-guard:v1 -->';
 const HEADER = '> 🛡️ [ceilf6/repo-guard](https://github.com/ceilf6/repo-guard)\n\n';
 
 function headers(token) {
@@ -61,7 +60,7 @@ export async function fetchIssue(repo, issueNumber, token) {
 }
 
 export async function postComment(repo, number, body, token) {
-  const markedBody = `${BOT_MARKER}\n${HEADER}${body}`;
+  const markedBody = `${HEADER}${body}`;
   const res = await fetch(`${GITHUB_API}/repos/${repo}/issues/${number}/comments`, {
     method: 'POST',
     headers: headers(token),
@@ -71,7 +70,7 @@ export async function postComment(repo, number, body, token) {
 }
 
 export async function postPRReview(repo, prNumber, body, event, comments, token) {
-  const markedBody = `${BOT_MARKER}\n${HEADER}${body}`;
+  const markedBody = `${HEADER}${body}`;
   const payload = {
     body: markedBody,
     event,

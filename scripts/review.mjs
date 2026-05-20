@@ -44,7 +44,7 @@ async function main() {
       return;
     }
     // Prevent infinite loop: skip if comment is from the bot itself
-    if (config.commentBody.includes('<!-- repo-guard:v1 -->')) {
+    if (config.commentBody.includes('ceilf6/repo-guard')) {
       console.log('Ignoring bot\'s own comment. Skipping.');
       return;
     }
