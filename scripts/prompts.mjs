@@ -63,10 +63,59 @@ export function loadSystemPrompt(type, language, extraInstructions) {
 
 const MAX_DIFF_SIZE = 100 * 1024;
 
+export function getChangedNewLines(file) {
+  const changedLines = new Set();
+  let newLine = null;
+
+  for (const line of (file.patch || '').split('\n')) {
+    const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (hunk) {
+      newLine = Number.parseInt(hunk[1], 10);
+      continue;
+    }
+    if (newLine === null) continue;
+
+    if (line.startsWith('+') && !line.startsWith('+++')) {
+      changedLines.add(newLine);
+      newLine += 1;
+    } else if (line.startsWith('-') && !line.startsWith('---')) {
+      continue;
+    } else {
+      newLine += 1;
+    }
+  }
+
+  return changedLines;
+}
+
+function formatChangedLineTargets(files) {
+  const lines = files
+    .map((file) => {
+      const changedLines = [...getChangedNewLines(file)];
+      if (changedLines.length === 0) return '';
+      return `- ${file.filename}: changed lines ${formatLineList(changedLines)}`;
+    })
+    .filter(Boolean);
+
+  if (lines.length === 0) return '';
+
+  return [
+    '## Inline Comment Line Targets',
+    'Use these new-file line numbers for `### Inline Findings`; do not calculate nearby context lines.',
+    ...lines,
+    '',
+  ].join('\n');
+}
+
+function formatLineList(lines) {
+  return lines.join(', ');
+}
+
 export function buildPRUserMessage(prInfo, files) {
   let diffText = '';
   let totalSize = 0;
   let truncated = false;
+  const includedFiles = [];
 
   const sorted = [...files].sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions));
 
@@ -82,6 +131,7 @@ export function buildPRUserMessage(prInfo, files) {
     }
     diffText += entry;
     totalSize += entry.length;
+    includedFiles.push(file);
     includedCount++;
   }
 
@@ -95,6 +145,10 @@ export function buildPRUserMessage(prInfo, files) {
   }
 
   message += `## Changed Files\n${files.map((f) => `- ${f.filename} (${f.status})`).join('\n')}\n\n`;
+  const inlineTargets = formatChangedLineTargets(includedFiles);
+  if (inlineTargets) {
+    message += `${inlineTargets}\n`;
+  }
   message += `## Diff\n${diffText}`;
 
   if (truncated) {
