@@ -20,6 +20,8 @@ on:
     types: [opened, synchronize]
   issues:
     types: [opened]
+  issue_comment:
+    types: [created]
 permissions:
   contents: read
   pull-requests: write
@@ -67,6 +69,16 @@ jobs:
 | `github-token` | No | `github.token` | GitHub token |
 | `language` | No | `en` | Response language (`en` / `zh`) |
 | `extra-instructions` | No | `""` | Additional prompt instructions |
+
+## Comment Triggers
+
+When `issue_comment` is enabled, Repo Guard runs only when a newly created issue or PR comment contains `@repo-guard` or `/review`.
+
+- On PR comments, Repo Guard reviews the pull request.
+- On issue comments, Repo Guard reviews the issue.
+- Any text after the trigger is passed to the model as an additional user request.
+
+Repo Guard posts a fresh comment or PR review on every workflow run. It does not deduplicate, update, or delete previous bot comments.
 
 ## Advanced: Separate PR and Issue Config
 
@@ -141,7 +153,7 @@ The bot automatically normalizes the URL for the selected provider.
 
 | 仓库 | 职责 |
 |------|------|
-| `ceilf6/repo-guard` | GitHub Action 运行时：事件监听、数据获取、LLM 调用、评论发布、去重 |
+| `ceilf6/repo-guard` | GitHub Action 运行时：事件监听、数据获取、LLM 调用、评论发布 |
 | `ceilf6/ceilf6-skills` | 评审知识：system prompt、评审标准、分析框架、评分规则 |
 
 repo-guard 通过 git submodule 引用 ceilf6-skills，运行时始终拉取最新版 skill。更新评审逻辑只需修改 ceilf6-skills 中的 skill 文件，无需改动 repo-guard 代码。
