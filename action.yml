@@ -1,4 +1,4 @@
-name: "Repo Guard"
+name: "Repo Guard AI"
 description: "AI-powered review bot for GitHub Issues and Pull Requests. Supports OpenAI and Anthropic APIs with custom relay/proxy."
 branding:
   icon: "shield"
