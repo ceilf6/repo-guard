@@ -69,18 +69,20 @@ export async function findBotComment(repo, number, token) {
   return existing ? existing.id : null;
 }
 
-export async function postComment(repo, number, body, token) {
+export async function postComment(repo, number, body, token, { forceNew = false } = {}) {
   const markedBody = `${BOT_MARKER}\n${body}`;
-  const existingId = await findBotComment(repo, number, token);
 
-  if (existingId) {
-    const res = await fetch(`${GITHUB_API}/repos/${repo}/issues/comments/${existingId}`, {
-      method: 'PATCH',
-      headers: headers(token),
-      body: JSON.stringify({ body: markedBody }),
-    });
-    if (!res.ok) throw new Error(`Failed to update comment: ${res.status}`);
-    return;
+  if (!forceNew) {
+    const existingId = await findBotComment(repo, number, token);
+    if (existingId) {
+      const res = await fetch(`${GITHUB_API}/repos/${repo}/issues/comments/${existingId}`, {
+        method: 'PATCH',
+        headers: headers(token),
+        body: JSON.stringify({ body: markedBody }),
+      });
+      if (!res.ok) throw new Error(`Failed to update comment: ${res.status}`);
+      return;
+    }
   }
 
   const res = await fetch(`${GITHUB_API}/repos/${repo}/issues/${number}/comments`, {
