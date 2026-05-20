@@ -36,6 +36,8 @@ test('buildPRUserMessage keeps smaller actionable diffs after omitting an oversi
 
   assert.match(message, /src\/parse-id\.js \(modified, \+1 -1\)/);
   assert.match(message, /function parseId/);
+  assert.match(message, /## Inline Comment Line Targets/);
+  assert.match(message, /- src\/parse-id\.js: changed lines 2/);
   assert.match(message, /Diff truncated/);
   assert.match(message, /1 file\(s\) omitted/);
 });
