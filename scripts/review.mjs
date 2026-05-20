@@ -2,10 +2,17 @@
 import { chatCompletion } from './llm-client.mjs';
 import { fetchPRInfo, fetchPRDiff, fetchIssue, postComment, postPRReview } from './github-api.mjs';
 import { loadSystemPrompt, buildPRUserMessage, buildIssueUserMessage } from './prompts.mjs';
+import {
+  extractInlineComments,
+  extractRecommendation,
+  extractUserPrompt,
+  getReviewNumber,
+  isTriggeredByComment,
+  mapRecommendationToEvent,
+  resolveReviewType,
+} from './review-logic.mjs';
 
 const env = process.env;
-
-const TRIGGER_PATTERNS = [/@repo-guard/i, /\/review/i];
 
 const config = {
   type: env.REVIEW_TYPE || 'both',
@@ -27,20 +34,6 @@ const config = {
   isPullRequest: env.IS_PULL_REQUEST === 'true',
 };
 
-function getPRNumberCandidate() {
-  if (config.prNumber) return config.prNumber;
-  if (config.eventName === 'issue_comment' && config.isPullRequest) return config.issueNumber;
-  return '';
-}
-
-function parsePositiveInteger(value, label) {
-  const number = Number(value);
-  if (!Number.isInteger(number) || number <= 0) {
-    throw new Error(`${label} must be a positive integer`);
-  }
-  return number;
-}
-
 async function main() {
   if (!config.apiKey) {
     console.error('Error: LLM_API_KEY is required');
@@ -53,7 +46,7 @@ async function main() {
 
   // For comment-triggered events, check if the comment matches trigger patterns
   if (config.eventName === 'issue_comment') {
-    if (!isTriggeredByComment()) {
+    if (!isTriggeredByComment(config.commentBody)) {
       console.log('Comment does not contain trigger keyword. Skipping.');
       return;
     }
@@ -64,7 +57,7 @@ async function main() {
     }
   }
 
-  const reviewType = resolveReviewType();
+  const reviewType = resolveReviewType(config);
   if (!reviewType) {
     console.log('No matching event for review. Skipping.');
     return;
@@ -74,45 +67,15 @@ async function main() {
   console.log(`Provider: ${config.provider}, Model: ${config.model}`);
 
   if (reviewType === 'pr') {
-    await reviewPR();
+    await reviewPR(getReviewNumber(config, 'pr'));
   } else {
-    await reviewIssue();
+    await reviewIssue(getReviewNumber(config, 'issue'));
   }
 
   console.log('Review complete.');
 }
 
-function resolveReviewType() {
-  if (config.type === 'pr') return getPRNumberCandidate() ? 'pr' : null;
-  if (config.type === 'issue') return config.issueNumber ? 'issue' : null;
-  // type === 'both': auto-detect from event
-  if (config.eventName === 'pull_request' && config.prNumber) return 'pr';
-  if (config.eventName === 'issues' && config.issueNumber) return 'issue';
-  // issue_comment: determine if it's on a PR or issue
-  if (config.eventName === 'issue_comment') {
-    if (config.isPullRequest && config.issueNumber) return 'pr';
-    if (config.issueNumber) return 'issue';
-  }
-  // Fallback: check which number is available
-  if (config.prNumber) return 'pr';
-  if (config.issueNumber) return 'issue';
-  return null;
-}
-
-function isTriggeredByComment() {
-  return TRIGGER_PATTERNS.some((pattern) => pattern.test(config.commentBody));
-}
-
-function extractUserPrompt() {
-  const cleaned = config.commentBody
-    .replace(/@repo-guard/gi, '')
-    .replace(/\/review/gi, '')
-    .trim();
-  return cleaned || '';
-}
-
-async function reviewPR() {
-  const prNumber = parsePositiveInteger(getPRNumberCandidate(), 'PR number');
+async function reviewPR(prNumber) {
   console.log(`Fetching PR #${prNumber}...`);
 
   const [prInfo, files] = await Promise.all([
@@ -120,7 +83,7 @@ async function reviewPR() {
     fetchPRDiff(config.repo, prNumber, config.githubToken),
   ]);
 
-  const userPrompt = extractUserPrompt();
+  const userPrompt = extractUserPrompt(config.commentBody);
   const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
   const systemPrompt = loadSystemPrompt('pr', config.language, extra);
   const userMessage = buildPRUserMessage(prInfo, files);
@@ -158,12 +121,11 @@ async function reviewPR() {
   }
 }
 
-async function reviewIssue() {
-  const issueNumber = parsePositiveInteger(config.issueNumber, 'Issue number');
+async function reviewIssue(issueNumber) {
   console.log(`Fetching Issue #${issueNumber}...`);
 
   const issue = await fetchIssue(config.repo, issueNumber, config.githubToken);
-  const userPrompt = extractUserPrompt();
+  const userPrompt = extractUserPrompt(config.commentBody);
   const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
   const systemPrompt = loadSystemPrompt('issue', config.language, extra);
   const userMessage = buildIssueUserMessage(issue);
@@ -186,35 +148,6 @@ async function reviewIssue() {
   });
 
   await postComment(config.repo, issueNumber, response, config.githubToken);
-}
-
-function extractRecommendation(response) {
-  const match = response.match(/\*\*Recommendation:\*\*\s*(APPROVE|COMMENT|REQUEST_CHANGES|NEEDS_HUMAN)/i);
-  return match ? match[1].toUpperCase() : 'COMMENT';
-}
-
-function mapRecommendationToEvent(recommendation) {
-  switch (recommendation) {
-    case 'APPROVE': return 'APPROVE';
-    case 'REQUEST_CHANGES': return 'REQUEST_CHANGES';
-    default: return 'COMMENT';
-  }
-}
-
-function extractInlineComments(response, files) {
-  const pattern = /\[([^\]]+):(\d+)\]\s*(.+)/g;
-  const comments = [];
-  const validPaths = new Set(files.map((f) => f.filename));
-  let match;
-
-  while ((match = pattern.exec(response)) !== null) {
-    const [, path, line, body] = match;
-    if (validPaths.has(path)) {
-      comments.push({ path, line: parseInt(line, 10), body });
-    }
-  }
-
-  return comments;
 }
 
 main().catch((err) => {
