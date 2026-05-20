@@ -12,7 +12,7 @@ function headers(token) {
   };
 }
 
-async function fetchAllPages(url, token, description) {
+export async function fetchAllPages(url, token, description) {
   const items = [];
   let page = 1;
 
