@@ -125,7 +125,7 @@ async function reviewPR() {
   } catch (err) {
     // If review with inline comments fails, fall back to simple comment
     console.warn(`PR review post failed (${err.message}), falling back to comment...`);
-    await postComment(config.repo, prNumber, response, config.githubToken, { forceNew: config.eventName === 'issue_comment' });
+    await postComment(config.repo, prNumber, response, config.githubToken);
   }
 }
 
@@ -149,8 +149,7 @@ async function reviewIssue() {
     messages: [{ role: 'user', content: userMessage }],
   });
 
-  const forceNew = config.eventName === 'issue_comment';
-  await postComment(config.repo, issueNumber, response, config.githubToken, { forceNew });
+  await postComment(config.repo, issueNumber, response, config.githubToken);
 }
 
 function extractRecommendation(response) {

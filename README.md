@@ -7,7 +7,7 @@ AI-powered review bot for GitHub Issues and Pull Requests.
 - Supports OpenAI-compatible and Anthropic API formats
 - Works with relay/proxy services via custom base URL
 - Configurable model, language, and extra instructions
-- Deduplication: edits existing bot comments instead of creating new ones
+- Trigger via PR/Issue creation or `@repo-guard` / `/review` comments
 
 ## Quick Start
 
@@ -125,9 +125,6 @@ At runtime, the action clones the skills repo and assembles the system prompt fr
 2. Fetches issue title, body, and labels
 3. Assembles system prompt from `issue-reviewer` skill
 4. Sends to LLM, posts structured quality assessment as a comment
-
-### Deduplication
-Bot comments include a hidden marker (`<!-- repo-guard:v1 -->`). On subsequent runs (e.g., PR update), the bot edits its existing comment instead of creating a new one.
 
 ## Relay/Proxy Support
 
