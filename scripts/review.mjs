@@ -27,6 +27,20 @@ const config = {
   isPullRequest: env.IS_PULL_REQUEST === 'true',
 };
 
+function getPRNumberCandidate() {
+  if (config.prNumber) return config.prNumber;
+  if (config.eventName === 'issue_comment' && config.isPullRequest) return config.issueNumber;
+  return '';
+}
+
+function parsePositiveInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number <= 0) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return number;
+}
+
 async function main() {
   if (!config.apiKey) {
     console.error('Error: LLM_API_KEY is required');
@@ -69,7 +83,7 @@ async function main() {
 }
 
 function resolveReviewType() {
-  if (config.type === 'pr') return config.prNumber ? 'pr' : null;
+  if (config.type === 'pr') return getPRNumberCandidate() ? 'pr' : null;
   if (config.type === 'issue') return config.issueNumber ? 'issue' : null;
   // type === 'both': auto-detect from event
   if (config.eventName === 'pull_request' && config.prNumber) return 'pr';
@@ -98,7 +112,7 @@ function extractUserPrompt() {
 }
 
 async function reviewPR() {
-  const prNumber = parseInt(config.prNumber, 10);
+  const prNumber = parsePositiveInteger(getPRNumberCandidate(), 'PR number');
   console.log(`Fetching PR #${prNumber}...`);
 
   const [prInfo, files] = await Promise.all([
@@ -145,7 +159,7 @@ async function reviewPR() {
 }
 
 async function reviewIssue() {
-  const issueNumber = parseInt(config.issueNumber, 10);
+  const issueNumber = parsePositiveInteger(config.issueNumber, 'Issue number');
   console.log(`Fetching Issue #${issueNumber}...`);
 
   const issue = await fetchIssue(config.repo, issueNumber, config.githubToken);
