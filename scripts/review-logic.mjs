@@ -67,6 +67,12 @@ export function mapRecommendationToEvent(recommendation) {
   }
 }
 
+export function stripThinkingBlocks(response = '') {
+  return response
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+    .trim();
+}
+
 export function extractInlineComments(response, files) {
   const pattern = /\[([^\]]+):(\d+)\]\s*(.+)/g;
   const comments = [];
