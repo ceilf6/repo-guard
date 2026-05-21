@@ -1,6 +1,6 @@
 // @ts-check
 import { chatCompletion } from './llm-client.mjs';
-import { fetchPRInfo, fetchPRDiff, fetchIssue, postComment, postPRReview } from './github-api.mjs';
+import { fetchPRInfo, fetchPRDiff, fetchBotLogin, fetchLastReviewForUser, fetchCompareDiff, fetchIssue, postComment, postPRReview } from './github-api.mjs';
 import { loadSystemPrompt, buildPRUserMessage, buildIssueUserMessage } from './prompts.mjs';
 import {
   extractInlineComments,
@@ -74,13 +74,42 @@ async function main() {
   console.log('评审完成。');
 }
 
+function shouldUseIncrementalDiff() {
+  return config.eventName === 'pull_request' && config.eventAction === 'synchronize';
+}
+
 async function reviewPR(prNumber) {
   console.log(`获取 PR #${prNumber}...`);
 
-  const [prInfo, files] = await Promise.all([
-    fetchPRInfo(config.repo, prNumber, config.githubToken),
-    fetchPRDiff(config.repo, prNumber, config.githubToken),
-  ]);
+  const prInfo = await fetchPRInfo(config.repo, prNumber, config.githubToken);
+  let files;
+  let incrementalUsed = false;
+
+  if (shouldUseIncrementalDiff()) {
+    try {
+      const botLogin = await fetchBotLogin(config.githubToken);
+      const lastReviewSha = await fetchLastReviewForUser(config.repo, prNumber, botLogin, config.githubToken);
+      if (lastReviewSha) {
+        const compareFiles = await fetchCompareDiff(config.repo, lastReviewSha, prInfo.headSha, config.githubToken);
+        if (compareFiles && compareFiles.length > 0) {
+          files = compareFiles;
+          incrementalUsed = true;
+        } else if (compareFiles && compareFiles.length === 0) {
+          console.log('增量差异：自上次评审以来无新变更，跳过。');
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn(`增量差异获取失败（${err.message}），降级为全量差异。`);
+    }
+  }
+
+  if (!files) {
+    files = await fetchPRDiff(config.repo, prNumber, config.githubToken);
+  }
+
+  const deltaStats = files.reduce((s, f) => s + f.additions + f.deletions, 0);
+  console.log(`差异模式: ${incrementalUsed ? '增量' : '全量'}（${files.length} 个文件，${deltaStats} 行变更）`);
 
   const userPrompt = extractUserPrompt(config.commentBody);
   const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
@@ -92,7 +121,7 @@ async function reviewPR(prNumber) {
     messages.push({ role: 'user', content: `用户请求: ${userPrompt}` });
   }
 
-  console.log(`调用 LLM（${files.length} 个文件，${prInfo.additions + prInfo.deletions} 行变更）...`);
+  console.log(`调用 LLM（${files.length} 个文件，${deltaStats} 行变更）...`);
 
   const response = await chatCompletion({
     provider: config.provider,

@@ -45,6 +45,7 @@ export async function fetchPRInfo(repo, prNumber, token) {
     body: data.body || '',
     base: data.base.ref,
     head: data.head.ref,
+    headSha: data.head.sha,
     user: data.user.login,
     additions: data.additions,
     deletions: data.deletions,
@@ -61,6 +62,51 @@ export async function fetchPRDiff(repo, prNumber, token) {
     deletions: f.deletions,
     patch: f.patch || '',
   }));
+}
+
+export async function fetchBotLogin(token) {
+  const res = await fetch(`${GITHUB_API}/user`, {
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(`Failed to fetch bot login: ${res.status}`);
+  const data = await res.json();
+  return data.login;
+}
+
+export async function fetchLastReviewForUser(repo, prNumber, userLogin, token) {
+  const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}/reviews`, {
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(`Failed to fetch PR reviews: ${res.status}`);
+  const reviews = await res.json();
+  // Iterate in reverse to find the latest non-dismissed review by this user
+  for (let i = reviews.length - 1; i >= 0; i--) {
+    const r = reviews[i];
+    if (r.user.login === userLogin && r.state !== 'DISMISSED' && r.commit_id) {
+      return r.commit_id;
+    }
+  }
+  return null;
+}
+
+export async function fetchCompareDiff(repo, baseSha, headSha, token) {
+  try {
+    const res = await fetch(`${GITHUB_API}/repos/${repo}/compare/${baseSha}...${headSha}`, {
+      headers: headers(token),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.status === 'diverged') return null;
+    return (data.files || []).map((f) => ({
+      filename: f.filename,
+      status: f.status,
+      additions: f.additions,
+      deletions: f.deletions,
+      patch: f.patch || '',
+    }));
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchIssue(repo, issueNumber, token) {
