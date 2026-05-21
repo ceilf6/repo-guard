@@ -32,10 +32,6 @@ inputs:
     description: "GitHub token for posting comments"
     required: false
     default: ${{ github.token }}
-  language:
-    description: "Response language: 'en' or 'zh'"
-    required: false
-    default: "en"
   extra-instructions:
     description: "Additional instructions appended to the system prompt"
     required: false
@@ -62,7 +58,6 @@ runs:
         LLM_BASE_URL: ${{ inputs.base-url }}
         LLM_MAX_TOKENS: ${{ inputs.max-tokens }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
-        REVIEW_LANGUAGE: ${{ inputs.language }}
         EXTRA_INSTRUCTIONS: ${{ inputs.extra-instructions }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
         ISSUE_NUMBER: ${{ github.event.issue.number }}

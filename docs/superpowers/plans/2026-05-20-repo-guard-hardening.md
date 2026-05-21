@@ -419,8 +419,14 @@ export function getReviewNumber(config, reviewType) {
 }
 
 export function extractRecommendation(response) {
-  const match = response.match(/\*\*Recommendation:\*\*\s*(APPROVE|COMMENT|REQUEST_CHANGES|NEEDS_HUMAN)/i);
-  return match ? match[1].toUpperCase() : 'COMMENT';
+  const match = response.match(/\*\*处理建议:\*\*\s*(批准|评论|请求修改|需要人工判断)/);
+  if (!match) return 'COMMENT';
+  return {
+    批准: 'APPROVE',
+    评论: 'COMMENT',
+    请求修改: 'REQUEST_CHANGES',
+    需要人工判断: 'NEEDS_HUMAN',
+  }[match[1]];
 }
 
 export function mapRecommendationToEvent(recommendation) {
@@ -605,7 +611,7 @@ test('comment trigger and user prompt extraction remove trigger words', () => {
 });
 
 test('recommendation mapping supports blocking and non-blocking outcomes', () => {
-  assert.equal(extractRecommendation('**Recommendation:** REQUEST_CHANGES'), 'REQUEST_CHANGES');
+  assert.equal(extractRecommendation('**处理建议:** 请求修改'), 'REQUEST_CHANGES');
   assert.equal(extractRecommendation('no explicit marker'), 'COMMENT');
   assert.equal(mapRecommendationToEvent('APPROVE'), 'APPROVE');
   assert.equal(mapRecommendationToEvent('REQUEST_CHANGES'), 'REQUEST_CHANGES');
