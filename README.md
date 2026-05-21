@@ -144,6 +144,34 @@ If you use a relay service (中转站) for API access, set `LLM_BASE_URL` to you
 
 The bot automatically normalizes the URL for the selected provider.
 
+### Private intranet models
+
+Repo Guard does not require self-hosted runners by default. Public users can
+keep using GitHub-hosted runners with public OpenAI-compatible or
+Anthropic-compatible endpoints.
+
+If a model endpoint is only reachable from your own machine or company network,
+run the repository workflow on a self-hosted runner that has access to that
+network, then point the existing provider settings at the private endpoint:
+
+```yaml
+jobs:
+  guard:
+    runs-on: [self-hosted, macOS, repo-guard-intranet]
+    steps:
+      - uses: ceilf6/repo-guard@main
+        with:
+          type: both
+          provider: anthropic
+          model: claude-opus-4-7-thinking
+          api-key: ${{ secrets.LLM_API_KEY }}
+          base-url: ${{ vars.LLM_BASE_URL }}
+```
+
+For public repositories, restrict self-hosted runner workflows to trusted
+events and actors. Do not let untrusted fork pull requests execute arbitrary
+code on a persistent local runner.
+
 ## Relationship with ceilf6-skills
 
 本仓库是 **执行层**，[ceilf6/ceilf6-skills](https://github.com/ceilf6/ceilf6-skills) 是 **知识层**。
