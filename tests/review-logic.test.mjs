@@ -69,7 +69,9 @@ test('comment trigger and user prompt extraction remove trigger words', () => {
 });
 
 test('recommendation mapping supports blocking and non-blocking outcomes', () => {
-  assert.equal(extractRecommendation('**Recommendation:** REQUEST_CHANGES'), 'REQUEST_CHANGES');
+  assert.equal(extractRecommendation('**处理建议:** 请求修改'), 'REQUEST_CHANGES');
+  assert.equal(extractRecommendation('**处理建议:** 批准'), 'APPROVE');
+  assert.equal(extractRecommendation('**处理建议:** 需要人工判断'), 'NEEDS_HUMAN');
   assert.equal(extractRecommendation('no explicit marker'), 'COMMENT');
   assert.equal(mapRecommendationToEvent('APPROVE'), 'APPROVE');
   assert.equal(mapRecommendationToEvent('REQUEST_CHANGES'), 'REQUEST_CHANGES');

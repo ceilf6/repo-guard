@@ -6,7 +6,8 @@ AI-powered review bot for GitHub Issues and Pull Requests.
 - Issue: Quality assessment with completeness, clarity, actionability scoring
 - Supports OpenAI-compatible and Anthropic API formats
 - Works with relay/proxy services via custom base URL
-- Configurable model, language, and extra instructions
+- Configurable model and extra instructions
+- Chinese review prompts and Chinese output contracts by default
 - Trigger via PR/Issue creation or `@repo-guard` / `/review` comments
 
 ## Quick Start
@@ -37,7 +38,6 @@ jobs:
           model: ${{ vars.LLM_MODEL || 'gpt-4o' }}
           api-key: ${{ secrets.LLM_API_KEY }}
           base-url: ${{ vars.LLM_BASE_URL }}
-          language: zh
 ```
 
 ## Configuration
@@ -67,7 +67,6 @@ jobs:
 | `base-url` | No | `""` | Custom API base URL |
 | `max-tokens` | No | `4096` | Max response tokens |
 | `github-token` | No | `github.token` | GitHub token |
-| `language` | No | `en` | Response language (`en` / `zh`) |
 | `extra-instructions` | No | `""` | Additional prompt instructions |
 
 ## Comment Triggers
@@ -97,8 +96,7 @@ jobs:
           model: claude-sonnet-4-20250514
           api-key: ${{ secrets.LLM_API_KEY }}
           base-url: ${{ vars.LLM_BASE_URL }}
-          language: zh
-          extra-instructions: "Focus on TypeScript type safety and React patterns."
+          extra-instructions: "重点检查 TypeScript 类型安全和 React 模式。"
 
   review-issue:
     if: github.event_name == 'issues'
@@ -111,7 +109,6 @@ jobs:
           model: gpt-4o
           api-key: ${{ secrets.LLM_API_KEY }}
           base-url: ${{ vars.LLM_BASE_URL }}
-          language: zh
 ```
 
 ## How It Works
@@ -129,7 +126,7 @@ At runtime, the action clones the skills repo and assembles the system prompt fr
 2. Fetches PR diff and metadata via GitHub API
 3. Truncates large diffs (>100KB) to focus on largest changes
 4. Assembles system prompt from `code-reviewer` skill
-5. Sends to LLM, extracts recommendation (APPROVE / COMMENT / REQUEST_CHANGES)
+5. Sends to LLM, extracts Chinese recommendation (`批准` / `评论` / `请求修改` / `需要人工判断`)
 6. Extracts inline findings and posts as PR review with line comments
 
 ### Issue Review

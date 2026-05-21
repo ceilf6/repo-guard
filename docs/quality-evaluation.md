@@ -11,7 +11,7 @@ Run `npm run eval:quality` to evaluate four fixed scenarios:
 - `issue-vague-crash`: issue review should ask for the smallest useful reproduction details.
 - `issue-ready-feature`: issue review should mark an actionable feature request as ready without noisy reporter asks.
 
-The harness checks stable output markers, parser compatibility, inline comment extraction, changed-line targeting, and basic actionability signals. PR prompts also include an `Inline Comment Line Targets` section so models do not have to calculate new-file line numbers from hunk headers.
+The harness checks Chinese output contract stability, parser compatibility, inline comment extraction, changed-line targeting, and basic actionability signals. PR prompts also include a `行级评论行号目标` section so models do not have to calculate new-file line numbers from hunk headers.
 
 ## Environment
 

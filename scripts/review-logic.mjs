@@ -48,8 +48,15 @@ export function getReviewNumber(config, reviewType) {
 }
 
 export function extractRecommendation(response) {
-  const match = response.match(/\*\*Recommendation:\*\*\s*(APPROVE|COMMENT|REQUEST_CHANGES|NEEDS_HUMAN)/i);
-  return match ? match[1].toUpperCase() : 'COMMENT';
+  const match = response.match(/\*\*处理建议:\*\*\s*(批准|评论|请求修改|需要人工判断)/);
+  if (!match) return 'COMMENT';
+
+  switch (match[1]) {
+    case '批准': return 'APPROVE';
+    case '请求修改': return 'REQUEST_CHANGES';
+    case '需要人工判断': return 'NEEDS_HUMAN';
+    default: return 'COMMENT';
+  }
 }
 
 export function mapRecommendationToEvent(recommendation) {

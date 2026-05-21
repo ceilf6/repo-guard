@@ -22,7 +22,6 @@ const config = {
   baseURL: env.LLM_BASE_URL || '',
   maxTokens: parseInt(env.LLM_MAX_TOKENS || '4096', 10),
   githubToken: env.GITHUB_TOKEN,
-  language: env.REVIEW_LANGUAGE || 'en',
   extraInstructions: env.EXTRA_INSTRUCTIONS || '',
   prNumber: env.PR_NUMBER,
   issueNumber: env.ISSUE_NUMBER,
@@ -44,27 +43,27 @@ async function main() {
     process.exit(1);
   }
 
-  // For comment-triggered events, check if the comment matches trigger patterns
+  // Comment-triggered events only run when the comment explicitly asks for review.
   if (config.eventName === 'issue_comment') {
     if (!isTriggeredByComment(config.commentBody)) {
-      console.log('Comment does not contain trigger keyword. Skipping.');
+      console.log('评论未包含触发关键词，跳过。');
       return;
     }
-    // Prevent infinite loop: skip if comment is from the bot itself
+    // Prevent feedback loops from comments posted by this action.
     if (config.commentBody.includes('ceilf6/repo-guard')) {
-      console.log('Ignoring bot\'s own comment. Skipping.');
+      console.log('忽略机器人自己的评论，跳过。');
       return;
     }
   }
 
   const reviewType = resolveReviewType(config);
   if (!reviewType) {
-    console.log('No matching event for review. Skipping.');
+    console.log('未匹配到需要评审的事件，跳过。');
     return;
   }
 
-  console.log(`Running ${reviewType} review on ${config.repo}...`);
-  console.log(`Provider: ${config.provider}, Model: ${config.model}`);
+  console.log(`在 ${config.repo} 上运行 ${reviewType} 评审...`);
+  console.log(`供应商: ${config.provider}, 模型: ${config.model}`);
 
   if (reviewType === 'pr') {
     await reviewPR(getReviewNumber(config, 'pr'));
@@ -72,11 +71,11 @@ async function main() {
     await reviewIssue(getReviewNumber(config, 'issue'));
   }
 
-  console.log('Review complete.');
+  console.log('评审完成。');
 }
 
 async function reviewPR(prNumber) {
-  console.log(`Fetching PR #${prNumber}...`);
+  console.log(`获取 PR #${prNumber}...`);
 
   const [prInfo, files] = await Promise.all([
     fetchPRInfo(config.repo, prNumber, config.githubToken),
@@ -85,15 +84,15 @@ async function reviewPR(prNumber) {
 
   const userPrompt = extractUserPrompt(config.commentBody);
   const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
-  const systemPrompt = loadSystemPrompt('pr', config.language, extra);
+  const systemPrompt = loadSystemPrompt('pr', extra);
   const userMessage = buildPRUserMessage(prInfo, files);
 
   const messages = [{ role: 'user', content: userMessage }];
   if (userPrompt) {
-    messages.push({ role: 'user', content: `User request: ${userPrompt}` });
+    messages.push({ role: 'user', content: `用户请求: ${userPrompt}` });
   }
 
-  console.log(`Calling LLM (${files.length} files, ${prInfo.additions + prInfo.deletions} lines changed)...`);
+  console.log(`调用 LLM（${files.length} 个文件，${prInfo.additions + prInfo.deletions} 行变更）...`);
 
   const response = await chatCompletion({
     provider: config.provider,
@@ -109,33 +108,33 @@ async function reviewPR(prNumber) {
   const event = mapRecommendationToEvent(recommendation);
   const inlineComments = extractInlineComments(response, files);
 
-  console.log(`Recommendation: ${recommendation} → GitHub event: ${event}`);
-  console.log(`Inline comments: ${inlineComments.length}`);
+  console.log(`处理建议: ${recommendation} → GitHub 评审事件: ${event}`);
+  console.log(`行级评论数: ${inlineComments.length}`);
 
   try {
     await postPRReview(config.repo, prNumber, response, event, inlineComments, config.githubToken);
   } catch (err) {
-    // If review with inline comments fails, fall back to simple comment
-    console.warn(`PR review post failed (${err.message}), falling back to comment...`);
+    // If inline review posting fails, keep the review body by falling back to a plain comment.
+    console.warn(`PR 评审发布失败（${err.message}），降级为普通评论...`);
     await postComment(config.repo, prNumber, response, config.githubToken);
   }
 }
 
 async function reviewIssue(issueNumber) {
-  console.log(`Fetching Issue #${issueNumber}...`);
+  console.log(`获取 Issue #${issueNumber}...`);
 
   const issue = await fetchIssue(config.repo, issueNumber, config.githubToken);
   const userPrompt = extractUserPrompt(config.commentBody);
   const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
-  const systemPrompt = loadSystemPrompt('issue', config.language, extra);
+  const systemPrompt = loadSystemPrompt('issue', extra);
   const userMessage = buildIssueUserMessage(issue);
 
   const messages = [{ role: 'user', content: userMessage }];
   if (userPrompt) {
-    messages.push({ role: 'user', content: `User request: ${userPrompt}` });
+    messages.push({ role: 'user', content: `用户请求: ${userPrompt}` });
   }
 
-  console.log('Calling LLM...');
+  console.log('调用 LLM...');
 
   const response = await chatCompletion({
     provider: config.provider,
@@ -151,6 +150,6 @@ async function reviewIssue(issueNumber) {
 }
 
 main().catch((err) => {
-  console.error('Review bot error:', err.message);
+  console.error('评审机器人错误:', err.message);
   process.exit(1);
 });

@@ -28,17 +28,17 @@ test('quality eval fixtures cover PR and issue review paths', () => {
 
 test('scoreQualityEvalResponse catches localized PR marker labels', () => {
   const fixture = buildQualityEvalFixtures().find((item) => item.id === 'pr-large-plus-small');
-  const response = `## CR Report: Fix ID parsing
+  const response = `## 代码评审报告: Fix ID parsing
 
-**风险等级:** HIGH
-**建议:** REQUEST_CHANGES
-**决策摘要:** marker labels were localized
+**风险等级:** 高
+**建议:** 请求修改
+**摘要:** marker labels were localized
 
-### Findings
+### 问题发现
 1. **[High] parseId behavior changed**
    - Evidence: src/parse-id.js
 
-### Inline Findings
+### 行级发现
 - [src/parse-id.js:2] parseInt changes behavior.`;
 
   const score = scoreQualityEvalResponse(fixture, response);
@@ -50,18 +50,18 @@ test('scoreQualityEvalResponse catches localized PR marker labels', () => {
 
 test('scoreQualityEvalResponse requires inline PR findings to target changed lines', () => {
   const fixture = buildQualityEvalFixtures().find((item) => item.id === 'pr-auth-bypass');
-  const response = `## CR Report: Make auth middleware more permissive
+  const response = `## 代码评审报告: Make auth middleware more permissive
 
-**Risk:** CRITICAL
-**Recommendation:** REQUEST_CHANGES
-**Decision Summary:** auth is bypassed
+**风险等级:** 致命
+**处理建议:** 请求修改
+**决策摘要:** auth is bypassed
 
-### Findings
+### 问题发现
 1. **[Critical] auth bypass**
    - Evidence: src/auth.js
    - Smallest viable fix: restore 401
 
-### Inline Findings
+### 行级发现
 - [src/auth.js:13] This points at nearby context instead of the changed return.
 - [tests/auth.test.js:6] restore the exact 401 assertion.`;
 
@@ -73,17 +73,17 @@ test('scoreQualityEvalResponse requires inline PR findings to target changed lin
 
 test('scoreQualityEvalResponse requires exact CR report heading level', () => {
   const fixture = buildQualityEvalFixtures().find((item) => item.id === 'pr-large-plus-small');
-  const response = `### CR Report: Fix ID parsing
+  const response = `### 代码评审报告: Fix ID parsing
 
-**Risk:** HIGH
-**Recommendation:** REQUEST_CHANGES
-**Decision Summary:** parseId changed
+**风险等级:** 高
+**处理建议:** 请求修改
+**决策摘要:** parseId changed
 
-### Findings
+### 问题发现
 1. **[High] parseId behavior changed**
    - Evidence: src/parse-id.js
 
-### Inline Findings
+### 行级发现
 - [src/parse-id.js:2] parseInt changes behavior.`;
 
   const score = scoreQualityEvalResponse(fixture, response);
@@ -100,14 +100,14 @@ test('getChangedNewLines parses added lines from unified diffs', () => {
 
 test('scoreQualityEvalResponse catches localized issue marker labels', () => {
   const fixture = buildQualityEvalFixtures().find((item) => item.id === 'issue-vague-crash');
-  const response = `## Issue Analysis: 登录后偶发 500
+  const response = `## Issue 分析: 登录后偶发 500
 
-**质量评分:** 2/5
-**优先级建议:** P1-High
-**类型:** Bug Report
-**维护者下一步动作:** Ask reporter
+**质量分:** 2/5
+**优先级:** P1-高
+**类型:** 缺陷报告
+**下一步动作:** 询问报告者
 
-### Suggestions
+### 建议
 - 请提供复现步骤和日志。`;
 
   const score = scoreQualityEvalResponse(fixture, response);
@@ -119,22 +119,22 @@ test('scoreQualityEvalResponse catches localized issue marker labels', () => {
 
 test('ready issue suggestion count is scoped to Suggestions section only', () => {
   const fixture = buildQualityEvalFixtures().find((item) => item.id === 'issue-ready-feature');
-  const response = `## Issue Analysis: Add dry-run mode
+  const response = `## Issue 分析: Add dry-run mode
 
-**Quality Score:** 5/5
-**Priority Suggestion:** P3-Low
-**Type:** Feature Request
-**Maintainer Next Action:** Ready to work
+**质量评分:** 5/5
+**优先级建议:** P3-低
+**类型:** 功能请求
+**维护者下一步动作:** 可以开始
 
-### Completeness
+### 完整性
 - Problem statement: clear
 - Reproduction steps: N/A
 - Expected vs actual: described
 
-### Suggestions
-- No required reporter action remains.
+### 建议
+- 无需报告者继续补充。
 
-### Summary
+### 总结
 This is ready to implement.`;
 
   const suggestions = getSuggestionsSection(response);

@@ -38,7 +38,7 @@ function readSkillPrompt(skillName) {
   return prompt;
 }
 
-export function loadSystemPrompt(type, language, extraInstructions) {
+export function loadSystemPrompt(type, extraInstructions) {
   let prompt;
 
   if (existsSync(SKILLS_DIR)) {
@@ -50,12 +50,8 @@ export function loadSystemPrompt(type, language, extraInstructions) {
     prompt = readFileSync(join(FALLBACK_PROMPTS_DIR, filename), 'utf-8');
   }
 
-  if (language === 'zh') {
-    prompt += '\n\n## Language Instruction\nRespond in Chinese (简体中文). Use Chinese for all analysis, findings, and suggestions.';
-  }
-
   if (extraInstructions) {
-    prompt += `\n\n## Additional Instructions\n${extraInstructions}`;
+    prompt += `\n\n## 补充要求\n${extraInstructions}`;
   }
 
   return prompt;
@@ -93,15 +89,15 @@ function formatChangedLineTargets(files) {
     .map((file) => {
       const changedLines = [...getChangedNewLines(file)];
       if (changedLines.length === 0) return '';
-      return `- ${file.filename}: changed lines ${formatLineList(changedLines)}`;
+      return `- ${file.filename}: 变更行 ${formatLineList(changedLines)}`;
     })
     .filter(Boolean);
 
   if (lines.length === 0) return '';
 
   return [
-    '## Inline Comment Line Targets',
-    'Use these new-file line numbers for `### Inline Findings`; do not calculate nearby context lines.',
+    '## 行级评论行号目标',
+    '在 `### 行级发现` 中使用这些新文件行号；不要自行推算邻近上下文行。',
     ...lines,
     '',
   ].join('\n');
@@ -109,6 +105,19 @@ function formatChangedLineTargets(files) {
 
 function formatLineList(lines) {
   return lines.join(', ');
+}
+
+function formatFileStatus(status) {
+  switch (status) {
+    case 'added': return '新增';
+    case 'removed': return '删除';
+    case 'modified': return '修改';
+    case 'renamed': return '重命名';
+    case 'copied': return '复制';
+    case 'changed': return '变更';
+    case 'unchanged': return '未变更';
+    default: return status;
+  }
 }
 
 export function buildPRUserMessage(prInfo, files) {
@@ -123,7 +132,7 @@ export function buildPRUserMessage(prInfo, files) {
   let omittedCount = 0;
 
   for (const file of sorted) {
-    const entry = `\n### ${file.filename} (${file.status}, +${file.additions} -${file.deletions})\n\`\`\`diff\n${file.patch}\n\`\`\`\n`;
+    const entry = `\n### ${file.filename} (${formatFileStatus(file.status)}, +${file.additions} -${file.deletions})\n\`\`\`diff\n${file.patch}\n\`\`\`\n`;
     if (totalSize + entry.length > MAX_DIFF_SIZE) {
       truncated = true;
       omittedCount++;
@@ -135,24 +144,24 @@ export function buildPRUserMessage(prInfo, files) {
     includedCount++;
   }
 
-  let message = `# Pull Request: ${prInfo.title}\n\n`;
-  message += `**Author:** ${prInfo.user}\n`;
-  message += `**Branch:** ${prInfo.head} → ${prInfo.base}\n`;
-  message += `**Stats:** +${prInfo.additions} -${prInfo.deletions}, ${prInfo.changedFiles} files\n\n`;
+  let message = `# PR: ${prInfo.title}\n\n`;
+  message += `**作者:** ${prInfo.user}\n`;
+  message += `**分支:** ${prInfo.head} → ${prInfo.base}\n`;
+  message += `**统计:** +${prInfo.additions} -${prInfo.deletions}, ${prInfo.changedFiles} 个文件\n\n`;
 
   if (prInfo.body) {
-    message += `## Description\n${prInfo.body}\n\n`;
+    message += `## 描述\n${prInfo.body}\n\n`;
   }
 
-  message += `## Changed Files\n${files.map((f) => `- ${f.filename} (${f.status})`).join('\n')}\n\n`;
+  message += `## 变更文件\n${files.map((f) => `- ${f.filename} (${formatFileStatus(f.status)})`).join('\n')}\n\n`;
   const inlineTargets = formatChangedLineTargets(includedFiles);
   if (inlineTargets) {
     message += `${inlineTargets}\n`;
   }
-  message += `## Diff\n${diffText}`;
+  message += `## 差异\n${diffText}`;
 
   if (truncated) {
-    message += `\n\n> ⚠️ Diff truncated (exceeded ${MAX_DIFF_SIZE / 1024}KB). ${omittedCount} file(s) omitted. Review focused on largest changes that fit.`;
+    message += `\n\n> ⚠️ 差异已截断（超过 ${MAX_DIFF_SIZE / 1024}KB）。已省略 ${omittedCount} 个文件。评审聚焦于可纳入上下文的最大变更。`;
   }
 
   return message;
@@ -160,12 +169,12 @@ export function buildPRUserMessage(prInfo, files) {
 
 export function buildIssueUserMessage(issue) {
   let message = `# Issue: ${issue.title}\n\n`;
-  message += `**Author:** ${issue.user}\n`;
+  message += `**作者:** ${issue.user}\n`;
 
   if (issue.labels.length > 0) {
-    message += `**Labels:** ${issue.labels.join(', ')}\n`;
+    message += `**标签:** ${issue.labels.join(', ')}\n`;
   }
 
-  message += `\n## Body\n${issue.body || '(empty)'}`;
+  message += `\n## 正文\n${issue.body || '(空)'}`;
   return message;
 }

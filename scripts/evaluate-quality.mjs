@@ -86,8 +86,8 @@ export function buildQualityEvalFixtures() {
     {
       id: 'pr-auth-bypass',
       kind: 'pr',
-      expectation: 'REQUEST_CHANGES with actionable auth/security finding and inline comment on src/auth.js',
-      system: loadSystemPrompt('pr', 'zh', 'Focus on user-visible correctness and security.'),
+      expectation: '请求修改，并给出可执行的鉴权/安全发现和 src/auth.js 行级评论',
+      system: loadSystemPrompt('pr', '重点关注用户可见的正确性和安全风险。'),
       user: buildPRUserMessage(
         prInfo({
           title: 'Make auth middleware more permissive',
@@ -105,8 +105,8 @@ export function buildQualityEvalFixtures() {
     {
       id: 'pr-large-plus-small',
       kind: 'pr',
-      expectation: 'Comment on parseId behavior despite a huge generated file being omitted',
-      system: loadSystemPrompt('pr', 'zh', 'Focus on user-visible correctness.'),
+      expectation: '即使巨大生成文件被省略，也要评论 parseId 行为变化',
+      system: loadSystemPrompt('pr', '重点关注用户可见的正确性。'),
       user: buildPRUserMessage(
         prInfo({
           title: 'Fix ID parsing and update generated snapshot',
@@ -124,8 +124,8 @@ export function buildQualityEvalFixtures() {
     {
       id: 'issue-vague-crash',
       kind: 'issue',
-      expectation: 'Ask for minimum useful reproduction info, not a long template lecture',
-      system: loadSystemPrompt('issue', 'zh', ''),
+      expectation: '询问最小有用复现信息，而不是输出模板说教',
+      system: loadSystemPrompt('issue'),
       user: buildIssueUserMessage({
         title: '登录后偶发 500',
         body: '登录以后偶尔报 500，但我不知道怎么复现。用户反馈挺多的。',
@@ -137,8 +137,8 @@ export function buildQualityEvalFixtures() {
     {
       id: 'issue-ready-feature',
       kind: 'issue',
-      expectation: 'Mark as ready or triage decision, avoid filler suggestions',
-      system: loadSystemPrompt('issue', 'zh', ''),
+      expectation: '标记为可以开始或需要分诊决策，并避免填充式建议',
+      system: loadSystemPrompt('issue'),
       user: buildIssueUserMessage({
         title: 'Add dry-run mode for repository review',
         body: `Problem: maintainers want to preview Repo Guard output without posting comments.
@@ -172,7 +172,7 @@ export function getEnvConfig(env = process.env) {
 }
 
 export function getSuggestionsSection(response) {
-  return getSection(response, '### Suggestions', '### Summary');
+  return getSection(response, '### 建议', '### 总结');
 }
 
 function getSection(response, heading, nextHeading) {
@@ -191,10 +191,10 @@ export function scoreQualityEvalResponse(fixture, response) {
     const inlineComments = extractInlineComments(response, fixture.files || []);
     const changedLinesByPath = new Map((fixture.files || []).map((file) => [file.filename, getChangedNewLines(file)]));
     const targetsChangedLine = (comment) => changedLinesByPath.get(comment.path)?.has(comment.line) || false;
-    has('has CR report heading', /^## CR Report:/im.test(response));
-    has('has recommendation marker', /\*\*Recommendation:\*\*/i.test(response));
-    has('has decision summary', /\*\*Decision Summary:\*\*/i.test(response));
-    has('does not echo inline template meta instruction', !response.includes('line-specific `[path:line]` findings') && !response.includes('Use `[path/to/file.ext:42]'));
+    has('has CR report heading', /^## 代码评审报告:/im.test(response));
+    has('has recommendation marker', /\*\*处理建议:\*\*/.test(response));
+    has('has decision summary', /\*\*决策摘要:\*\*/.test(response));
+    has('does not echo inline template meta instruction', !response.includes('line-specific `[path:line]` findings') && !response.includes('Use `[path/to/file.ext:42]') && !response.includes('行级发现必须以方括号形式'));
     has('has concise fix direction', /fix|修复|reject|拒绝|restore|恢复|validate|校验|401|鉴权|认证|解析|parse/i.test(response));
     if (fixture.id === 'pr-auth-bypass') {
       has('auth bypass recommends changes', recommendation === 'REQUEST_CHANGES');
@@ -207,19 +207,19 @@ export function scoreQualityEvalResponse(fixture, response) {
       has('large fixture inline targets changed parse-id line', inlineComments.some((comment) => comment.path === 'src/parse-id.js' && targetsChangedLine(comment)));
     }
   } else {
-    has('has issue analysis heading', /## Issue Analysis:/i.test(response));
-    has('has quality score', /\*\*Quality Score:\*\*/i.test(response));
-    has('has priority suggestion', /\*\*Priority Suggestion:\*\*/i.test(response));
-    has('has maintainer next action', /\*\*Maintainer Next Action:\*\*/i.test(response));
+    has('has issue analysis heading', /^## Issue 分析:/im.test(response));
+    has('has quality score', /\*\*质量评分:\*\*/.test(response));
+    has('has priority suggestion', /\*\*优先级建议:\*\*/.test(response));
+    has('has maintainer next action', /\*\*维护者下一步动作:\*\*/.test(response));
     has('avoids abstract missing-info labels in suggestions', !/Environment info is missing|Reproduction steps are incomplete/.test(response));
     if (fixture.id === 'issue-vague-crash') {
       has('vague crash asks for reproduction or logs', /复现|日志|错误|500|版本|触发/.test(response));
-      has('vague crash does not mark ready', !/\*\*Maintainer Next Action:\*\*\s*Ready to work/i.test(response));
+      has('vague crash does not mark ready', !/\*\*维护者下一步动作:\*\*\s*可以开始/.test(response));
     }
     if (fixture.id === 'issue-ready-feature') {
       const suggestions = getSuggestionsSection(response);
       has('ready feature avoids noisy suggestion pile', (suggestions.match(/^- /gm) || []).length <= 2);
-      has('ready feature recognizes actionable acceptance criteria', /Ready to work|Needs triage decision|可开始|排期|决策/.test(response));
+      has('ready feature recognizes actionable acceptance criteria', /可以开始|需要分诊决策|可开始|排期|决策/.test(response));
     }
   }
 
