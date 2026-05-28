@@ -16,6 +16,8 @@ permissions:
 
 jobs:
   guard:
+    # This job runs on a local self-hosted runner with intranet model access.
+    # Keep untrusted forks and outsider-triggered issues/comments away from it.
     if: >
       github.actor != 'dependabot[bot]' &&
       (
@@ -37,7 +39,7 @@ jobs:
       - uses: ceilf6/repo-guard@main
         with:
           type: both
-          provider: ${{ vars.LLM_PROVIDER }}
-          model: ${{ vars.LLM_MODEL }}
+          provider: ${{ vars.LLM_PROVIDER || 'anthropic' }}
+          model: ${{ vars.LLM_MODEL || 'claude-opus-4-7-thinking' }}
           api-key: ${{ secrets.LLM_API_KEY }}
           base-url: ${{ vars.LLM_BASE_URL }}

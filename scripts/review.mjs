@@ -1,6 +1,6 @@
 // @ts-check
 import { chatCompletion } from './llm-client.mjs';
-import { fetchPRInfo, fetchPRDiff, fetchIssue, postComment, postPRReview } from './github-api.mjs';
+import { fetchPRInfo, fetchPRDiff, fetchIssue, fetchPRLinkedIssues, postComment, postPRReview } from './github-api.mjs';
 import { loadSystemPrompt, buildPRUserMessage, buildIssueUserMessage } from './prompts.mjs';
 import {
   extractInlineComments,
@@ -82,18 +82,19 @@ async function reviewPR(prNumber) {
     fetchPRInfo(config.repo, prNumber, config.githubToken),
     fetchPRDiff(config.repo, prNumber, config.githubToken),
   ]);
+  const linkedIssueContext = await fetchPRLinkedIssues(config.repo, prNumber, prInfo, config.githubToken);
 
   const userPrompt = extractUserPrompt(config.commentBody);
   const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
   const systemPrompt = loadSystemPrompt('pr', extra);
-  const userMessage = buildPRUserMessage(prInfo, files);
+  const userMessage = buildPRUserMessage(prInfo, files, linkedIssueContext);
 
   const messages = [{ role: 'user', content: userMessage }];
   if (userPrompt) {
     messages.push({ role: 'user', content: `用户请求: ${userPrompt}` });
   }
 
-  console.log(`调用 LLM（${files.length} 个文件，${prInfo.additions + prInfo.deletions} 行变更）...`);
+  console.log(`调用 LLM（${files.length} 个文件，${prInfo.additions + prInfo.deletions} 行变更，${linkedIssueContext.issues.length} 个关联 Issue）...`);
 
   const response = stripThinkingBlocks(await chatCompletion({
     provider: config.provider,

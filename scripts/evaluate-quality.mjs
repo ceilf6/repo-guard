@@ -82,6 +82,25 @@ export function buildQualityEvalFixtures() {
     },
   ];
 
+  const prLinkedIssueFiles = [
+    {
+      filename: 'scripts/review.mjs',
+      status: 'modified',
+      additions: 3,
+      deletions: 1,
+      patch: `@@ -5,8 +5,10 @@ async function finishReview({ dryRun, kind, body }) {
+   if (dryRun && kind === 'issue') {
+     console.log(body);
+     return;
+   }
++  if (kind === 'issue') {
++    return postComment(body);
++  }
+   return postPRReview(body);
+ }`,
+    },
+  ];
+
   return [
     {
       id: 'pr-auth-bypass',
@@ -120,6 +139,43 @@ export function buildQualityEvalFixtures() {
         prLargeFiles,
       ),
       files: prLargeFiles,
+    },
+    {
+      id: 'pr-linked-issue-context',
+      kind: 'pr',
+      expectation: '结合关联 Issue #77 的验收标准，发现 dry-run 仍会发布 PR review',
+      system: loadSystemPrompt('pr', '重点检查 PR 是否满足关联 issue 的验收标准。'),
+      user: buildPRUserMessage(
+        prInfo({
+          title: 'Add dry-run mode',
+          body: 'Closes #77. This adds dry-run handling for review publishing.',
+          head: 'dry-run',
+          user: 'dev-c',
+          additions: 3,
+          deletions: 1,
+          changedFiles: 1,
+        }),
+        prLinkedIssueFiles,
+        {
+          issues: [{
+            number: 77,
+            title: 'Add dry-run mode for repository review',
+            state: 'open',
+            user: 'reporter-c',
+            labels: ['enhancement'],
+            url: 'https://github.com/owner/repo/issues/77',
+            sources: ['linked', 'body-ref'],
+            body: `Problem: maintainers want to preview Repo Guard output without posting comments.
+
+Acceptance criteria:
+- Existing workflows keep posting comments by default.
+- dry-run prevents issue comments and PR reviews.
+- Unit tests cover both issue and PR modes.`,
+          }],
+          warnings: [],
+        },
+      ),
+      files: prLinkedIssueFiles,
     },
     {
       id: 'issue-vague-crash',
@@ -205,6 +261,10 @@ export function scoreQualityEvalResponse(fixture, response) {
       has('large fixture discusses parse-id', /parse-id|parseId|Number|parseInt|解析/.test(response));
       has('large fixture has inline parse-id comment', inlineComments.some((comment) => comment.path === 'src/parse-id.js'));
       has('large fixture inline targets changed parse-id line', inlineComments.some((comment) => comment.path === 'src/parse-id.js' && targetsChangedLine(comment)));
+    }
+    if (fixture.id === 'pr-linked-issue-context') {
+      has('linked issue context is used', /Issue #77|acceptance criteria|验收|dry-run prevents issue comments and PR reviews|PR reviews/i.test(response));
+      has('linked issue fixture recommends changes', recommendation === 'REQUEST_CHANGES');
     }
   } else {
     has('has issue analysis heading', /^## Issue 分析:/im.test(response));

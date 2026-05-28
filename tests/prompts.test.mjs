@@ -46,6 +46,44 @@ test('buildPRUserMessage keeps smaller actionable diffs after omitting an oversi
   assert.doesNotMatch(message, /Changed Files|Inline Comment Line Targets|Diff truncated|\\d+ files/);
 });
 
+test('buildPRUserMessage includes linked issue context and degraded warnings', () => {
+  const message = buildPRUserMessage(prInfo({
+    title: 'Add dry-run mode',
+    body: 'Closes #12.',
+  }), [{
+    filename: 'scripts/review.mjs',
+    status: 'modified',
+    additions: 1,
+    deletions: 0,
+    patch: '@@ -1,2 +1,3 @@\n export function run() {}\n+export function dryRun() {}',
+  }], {
+    warnings: ['关联 Issue 获取不完整，级联置信度 degraded。'],
+    issues: [{
+      number: 12,
+      title: 'Add dry-run mode',
+      state: 'open',
+      user: 'reporter',
+      labels: ['enhancement'],
+      url: 'https://github.com/owner/repo/issues/12',
+      sources: ['linked', 'body-ref'],
+      body: 'Acceptance criteria: dry-run prevents issue comments and PR reviews.',
+    }],
+  });
+
+  assert.match(message, /## 关联 Issue 上下文/);
+  assert.match(message, /关联 Issue 获取不完整/);
+  assert.match(message, /### Issue #12: Add dry-run mode/);
+  assert.match(message, /来源: linked, body-ref/);
+  assert.match(message, /dry-run prevents issue comments and PR reviews/);
+});
+
+test('buildPRUserMessage states when no linked issues were found', () => {
+  const message = buildPRUserMessage(prInfo(), [], { issues: [], warnings: [] });
+
+  assert.match(message, /## 关联 Issue 上下文/);
+  assert.match(message, /未发现关联 Issue/);
+});
+
 test('buildIssueUserMessage localizes issue metadata labels', () => {
   const message = buildIssueUserMessage({
     title: '登录后偶发 500',
