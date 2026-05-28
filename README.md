@@ -123,7 +123,7 @@ At runtime, the action clones the skills repo and assembles the system prompt fr
 
 ### PR Review
 1. Initializes skills from `ceilf6/ceilf6-skills` submodule
-2. Fetches PR diff, metadata, and linked issue context via GitHub API
+2. Fetches the complete cumulative PR diff, metadata, and linked issue context via GitHub API
 3. Includes GitHub closing issues plus same-repo `#123` references from the PR title/body
 4. Truncates large diffs (>100KB) to focus on largest changes
 5. Assembles system prompt from `code-reviewer` skill

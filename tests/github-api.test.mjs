@@ -1,8 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchPRDiff, fetchPRLinkedIssues } from '../scripts/github-api.mjs';
+import * as githubApi from '../scripts/github-api.mjs';
+
+const { fetchPRDiff, fetchPRLinkedIssues } = githubApi;
 
 const originalFetch = globalThis.fetch;
+
+test('github API does not expose incremental PR diff helpers', () => {
+  assert.equal('fetchBotLogin' in githubApi, false);
+  assert.equal('fetchLastReviewForUser' in githubApi, false);
+  assert.equal('fetchCompareDiff' in githubApi, false);
+});
 
 test('fetchPRDiff fetches and maps a single page', async (t) => {
   t.after(() => {

@@ -42,7 +42,8 @@ test('buildPRUserMessage keeps smaller actionable diffs after omitting an oversi
   assert.match(message, /差异已截断/);
   assert.match(message, /已省略 1 个文件/);
   assert.match(message, /\*\*统计:\*\* \+5000 -10, 2 个文件/);
-  assert.match(message, /## 差异/);
+  assert.match(message, /## 完整 PR 差异/);
+  assert.match(message, /以下 diff 来自 PR 当前全部变更/);
   assert.doesNotMatch(message, /Changed Files|Inline Comment Line Targets|Diff truncated|\\d+ files/);
 });
 

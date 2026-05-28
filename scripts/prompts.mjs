@@ -199,7 +199,7 @@ export function buildPRUserMessage(prInfo, files, linkedIssueContext) {
   if (inlineTargets) {
     message += `${inlineTargets}\n`;
   }
-  message += `## 差异\n${diffText}`;
+  message += `## 完整 PR 差异\n以下 diff 来自 PR 当前全部变更，而不是本次推送的增量提交。\n${diffText}`;
 
   if (truncated) {
     message += `\n\n> ⚠️ 差异已截断（超过 ${MAX_DIFF_SIZE / 1024}KB）。已省略 ${omittedCount} 个文件。评审聚焦于可纳入上下文的最大变更。`;
