@@ -7,6 +7,7 @@ import {
   extractRecommendation,
   extractUserPrompt,
   getReviewNumber,
+  isRepoGuardPublishedComment,
   isTriggeredByComment,
   mapRecommendationToEvent,
   normalizeReviewResponse,
@@ -52,7 +53,7 @@ async function main() {
       return;
     }
     // Prevent feedback loops from comments posted by this action.
-    if (config.commentBody.includes('ceilf6/repo-guard')) {
+    if (isRepoGuardPublishedComment(config.commentBody)) {
       console.log('忽略机器人自己的评论，跳过。');
       return;
     }

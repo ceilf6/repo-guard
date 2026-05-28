@@ -4,6 +4,7 @@ import {
   extractRecommendation,
   extractUserPrompt,
   getReviewNumber,
+  isRepoGuardPublishedComment,
   isTriggeredByComment,
   mapRecommendationToEvent,
   normalizeReviewResponse,
@@ -64,10 +65,20 @@ test('missing PR number throws a clear error', () => {
 });
 
 test('comment trigger and user prompt extraction remove trigger words', () => {
-  assert.equal(isTriggeredByComment('@repo-guard please focus on auth'), true);
+  assert.equal(isTriggeredByComment('@ceilf6/repo-guard please focus on auth'), true);
+  assert.equal(isTriggeredByComment('@repo-guard please focus on auth'), false);
   assert.equal(isTriggeredByComment('ordinary comment'), false);
+  assert.equal(extractUserPrompt('@ceilf6/repo-guard please focus on auth'), 'please focus on auth');
   assert.equal(extractUserPrompt('/review please focus on auth'), 'please focus on auth');
-  assert.equal(extractUserPrompt('@repo-guard'), '');
+  assert.equal(extractUserPrompt('@ceilf6/repo-guard'), '');
+});
+
+test('repo guard published comment detection does not block user mentions', () => {
+  assert.equal(isRepoGuardPublishedComment('@ceilf6/repo-guard please focus on auth'), false);
+  assert.equal(
+    isRepoGuardPublishedComment('> 🛡️ [ceilf6/repo-guard](https://github.com/ceilf6/repo-guard)\n\n## Issue 分析'),
+    true,
+  );
 });
 
 test('recommendation mapping supports blocking and non-blocking outcomes', () => {

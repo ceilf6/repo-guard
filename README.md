@@ -8,7 +8,7 @@ AI-powered review bot for GitHub Issues and Pull Requests.
 - Works with relay/proxy services via custom base URL
 - Configurable model and extra instructions
 - Chinese review prompts and Chinese output contracts by default
-- Trigger via PR/Issue creation or `@repo-guard` / `/review` comments
+- Trigger via PR/Issue creation or `@ceilf6/repo-guard` / `/review` comments
 
 ## Quick Start
 
@@ -71,7 +71,7 @@ jobs:
 
 ## Comment Triggers
 
-When `issue_comment` is enabled, Repo Guard runs only when a newly created issue or PR comment contains `@repo-guard` or `/review`.
+When `issue_comment` is enabled, Repo Guard runs only when a newly created issue or PR comment contains `@ceilf6/repo-guard` or `/review`.
 
 - On PR comments, Repo Guard reviews the pull request.
 - On issue comments, Repo Guard reviews the issue.
