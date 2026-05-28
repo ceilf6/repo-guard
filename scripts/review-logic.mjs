@@ -1,6 +1,6 @@
 // @ts-check
 
-const TRIGGER_PATTERNS = [/@repo-guard/i, /\/review/i];
+const TRIGGER_PATTERNS = [/@ceilf6\/repo-guard/i, /\/review/i];
 
 export function isTriggeredByComment(commentBody = '') {
   return TRIGGER_PATTERNS.some((pattern) => pattern.test(commentBody));
@@ -8,9 +8,15 @@ export function isTriggeredByComment(commentBody = '') {
 
 export function extractUserPrompt(commentBody = '') {
   return commentBody
-    .replace(/@repo-guard/gi, '')
+    .replace(/@ceilf6\/repo-guard/gi, '')
     .replace(/\/review/gi, '')
     .trim();
+}
+
+export function isRepoGuardPublishedComment(commentBody = '') {
+  return /^>\s*[^\n]*\[ceilf6\/repo-guard\]\(https:\/\/github\.com\/ceilf6\/repo-guard\)/i.test(
+    String(commentBody || '').trimStart(),
+  );
 }
 
 export function getPRNumberCandidate(config) {
