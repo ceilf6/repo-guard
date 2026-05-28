@@ -538,13 +538,13 @@ function mapRiskLevel(value, findings = []) {
 function mapRecommendationLabel(value, findings) {
   const text = String(value || '').toLowerCase();
   const normalized = normalizeToken(value);
+  if (hasBlockingFindings(findings)) return '请求修改';
   if (hasNegatedApproval(text)) return '请求修改';
+  if (hasConditionalApproval(text)) return '请求修改';
   if (normalized === 'REQUEST_CHANGES' || /request[_ -]?changes|请求修改|block|blocking|must fix/.test(text)) return '请求修改';
   if (normalized === 'NEEDS_HUMAN' || /needs[_ -]?human|human|人工/.test(text)) return '需要人工判断';
   if (normalized === 'APPROVE' || /approve|批准|可以合并/.test(text)) return '批准';
   if (normalized === 'COMMENT' || /comment|评论/.test(text)) return '评论';
-  const severities = findings.map((finding) => normalizeFinding(finding).severity);
-  if (severities.includes('致命') || severities.includes('高')) return '请求修改';
   return findings.length > 0 ? '评论' : '评论';
 }
 
@@ -598,7 +598,9 @@ function inferRiskLevelFromText(text, findings = []) {
 }
 
 function inferRecommendationFromText(text, findings = []) {
+  if (hasBlockingFindings(findings)) return '请求修改';
   if (hasNegatedApproval(text)) return '请求修改';
+  if (hasConditionalApproval(text)) return '请求修改';
   if (/请求修改|需要修改|修改后再合并|不能合并|request[_ -]?changes/i.test(text)) return '请求修改';
   if (/需要人工判断|人工判断|needs[_ -]?human/i.test(text)) return '需要人工判断';
   if (/批准|可以合并|approve/i.test(text)) return '批准';
@@ -671,7 +673,19 @@ function extractLooseInlineFindings(response) {
 }
 
 function hasNegatedApproval(text) {
-  return /do\s+not\s+approve|not\s+approved|cannot\s+approve|can't\s+approve|don'?t\s+approve|不要批准|不应批准|不能批准|不可批准/i.test(text);
+  return /do\s+not\s+approve|not\s+approved|not\s+ready\s+to\s+approve|cannot\s+approve|can't\s+approve|don'?t\s+approve|不要批准|不应批准|不能批准|不可批准/i.test(text);
+}
+
+function hasConditionalApproval(text) {
+  return /approve\s+(?:after|once|when|if|only\s+after)[^.。\n]*(?:fix|fixed|fixing|resolve|resolved|address|addressed|change|update|修复|解决|处理|整改|修改)/i.test(text) ||
+    /(?:批准|合并)(?:前|之前).*?(?:需要|必须).*?(?:修复|解决|处理|整改|修改)/i.test(text) ||
+    /(?:修复|解决|处理|整改|修改).*?(?:后|以后).*?(?:批准|合并)/i.test(text) ||
+    /可以合并.*?(?:但|但是).*?(?:需要|必须).*?(?:修复|解决|处理|整改|修改)/i.test(text);
+}
+
+function hasBlockingFindings(findings = []) {
+  const severities = findings.map((finding) => normalizeFinding(finding).severity);
+  return severities.includes('致命') || severities.includes('高');
 }
 
 function formatFindings(findings) {

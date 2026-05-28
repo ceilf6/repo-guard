@@ -131,6 +131,29 @@ test('normalizeReviewResponse does not approve negated structured recommendation
   assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
 });
 
+test('normalizeReviewResponse does not approve conditional recommendations with high findings', () => {
+  const response = JSON.stringify({
+    summary: 'Authentication is still bypassed.',
+    recommendation: 'Approve after fixing auth.',
+    findings: [{
+      path: 'src/auth.js',
+      line: 12,
+      severity: 'high',
+      message: 'missing token falls through to next()',
+    }],
+  });
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Make auth permissive',
+  });
+
+  assert.match(normalized, /\*\*风险等级:\*\* 高/);
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+  assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
+  assert.equal(mapRecommendationToEvent(extractRecommendation(normalized)), 'REQUEST_CHANGES');
+});
+
 test('normalizeReviewResponse converts localized PR JSON into inline markdown findings', () => {
   const response = JSON.stringify({
     行级发现: [{
@@ -239,6 +262,35 @@ Do not approve until auth is fixed.`;
 
   assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
   assert.match(normalized, /- \[src\/auth\.js:12\] Missing token now falls through to next\(\)\./);
+  assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
+});
+
+test('normalizeReviewResponse does not approve conditional non-contract markdown', () => {
+  const response = `Review follows:
+
+Not ready to approve until auth is fixed.
+
+- [src/auth.js:12] Missing token now falls through to next().`;
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Make auth permissive',
+  });
+
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+  assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
+  assert.equal(mapRecommendationToEvent(extractRecommendation(normalized)), 'REQUEST_CHANGES');
+});
+
+test('normalizeReviewResponse treats approve-once-fixed text as blocking', () => {
+  const response = 'Approve once fixed: src/auth.js:12 must reject missing tokens.';
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Make auth permissive',
+  });
+
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
   assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
 });
 
