@@ -6,6 +6,7 @@ import {
   getReviewNumber,
   isTriggeredByComment,
   mapRecommendationToEvent,
+  normalizeReviewResponse,
   resolveReviewType,
   stripThinkingBlocks,
 } from '../scripts/review-logic.mjs';
@@ -91,4 +92,101 @@ Private reasoning should not be posted.
 `;
 
   assert.equal(stripThinkingBlocks(response), '## Issue 分析\n\n正文保留。');
+});
+
+test('normalizeReviewResponse converts structured PR JSON into markdown contract', () => {
+  const response = JSON.stringify({
+    summary: 'The PR appears aligned with Issue #98.',
+    findings: [],
+    risk_level: 'MEDIUM',
+    recommendation: 'Approve after normal CR.',
+  });
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: '[codex] Add AI subtitle replay support',
+  });
+
+  assert.match(normalized, /^## 代码评审报告: \[codex\] Add AI subtitle replay support/);
+  assert.match(normalized, /\*\*风险等级:\*\* 中/);
+  assert.match(normalized, /\*\*处理建议:\*\* 批准/);
+  assert.match(normalized, /\*\*决策摘要:\*\* The PR appears aligned with Issue #98\./);
+  assert.match(normalized, /### 问题发现\n未发现 blocking findings。/);
+  assert.equal(extractRecommendation(normalized), 'APPROVE');
+});
+
+test('normalizeReviewResponse converts localized PR JSON into inline markdown findings', () => {
+  const response = JSON.stringify({
+    行级发现: [{
+      文件: 'src/auth.js',
+      行号: 12,
+      严重性: '高',
+      问题: '缺少 token 时直接调用 next() 会绕过认证。',
+    }],
+  });
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Make auth middleware more permissive',
+  });
+
+  assert.match(normalized, /^## 代码评审报告: Make auth middleware more permissive/);
+  assert.match(normalized, /\*\*风险等级:\*\* 高/);
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+  assert.match(normalized, /- \[src\/auth\.js:12\] 缺少 token 时直接调用 next\(\) 会绕过认证。/);
+  assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
+});
+
+test('normalizeReviewResponse wraps non-contract PR markdown and preserves loose inline findings', () => {
+  const response = `## PR Review
+
+### 行级发现
+
+- **src/parse-id.js:2**
+  parseInt 会接受部分数字字符串。
+
+### 总结
+
+建议修改后再合并。`;
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Fix ID parsing',
+  });
+
+  assert.match(normalized, /^## 代码评审报告: Fix ID parsing/);
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+  assert.match(normalized, /- \[src\/parse-id\.js:2\] parseInt 会接受部分数字字符串。/);
+});
+
+test('normalizeReviewResponse leaves markdown review responses unchanged', () => {
+  const response = `## 代码评审报告: Already Markdown
+
+**风险等级:** 低
+**处理建议:** 评论
+**决策摘要:** markdown body`;
+
+  assert.equal(normalizeReviewResponse(response, { type: 'pr' }), response);
+});
+
+test('normalizeReviewResponse converts structured issue JSON into markdown contract', () => {
+  const response = JSON.stringify({
+    quality_score: '2/5',
+    priority_suggestion: 'P1-高',
+    type: '缺陷报告',
+    maintainer_next_action: '询问报告者',
+    suggestions: ['请补充稳定复现步骤和错误日志。'],
+    summary: '当前 issue 缺少复现信息，维护者需要先追问。',
+  });
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: '登录后偶发 500',
+  });
+
+  assert.match(normalized, /^## Issue 分析: 登录后偶发 500/);
+  assert.match(normalized, /\*\*质量评分:\*\* 2\/5/);
+  assert.match(normalized, /\*\*优先级建议:\*\* P1-高/);
+  assert.match(normalized, /\*\*维护者下一步动作:\*\* 询问报告者/);
+  assert.match(normalized, /### 建议\n- 请补充稳定复现步骤和错误日志。/);
 });

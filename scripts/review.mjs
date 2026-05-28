@@ -9,6 +9,7 @@ import {
   getReviewNumber,
   isTriggeredByComment,
   mapRecommendationToEvent,
+  normalizeReviewResponse,
   resolveReviewType,
   stripThinkingBlocks,
 } from './review-logic.mjs';
@@ -96,7 +97,7 @@ async function reviewPR(prNumber) {
 
   console.log(`调用 LLM（${files.length} 个文件，${prInfo.additions + prInfo.deletions} 行变更，${linkedIssueContext.issues.length} 个关联 Issue）...`);
 
-  const response = stripThinkingBlocks(await chatCompletion({
+  const rawResponse = await chatCompletion({
     provider: config.provider,
     model: config.model,
     apiKey: config.apiKey,
@@ -104,7 +105,8 @@ async function reviewPR(prNumber) {
     maxTokens: config.maxTokens,
     system: systemPrompt,
     messages,
-  }));
+  });
+  const response = normalizeReviewResponse(stripThinkingBlocks(rawResponse), { type: 'pr', title: prInfo.title });
 
   const recommendation = extractRecommendation(response);
   const event = mapRecommendationToEvent(recommendation);
@@ -138,7 +140,7 @@ async function reviewIssue(issueNumber) {
 
   console.log('调用 LLM...');
 
-  const response = stripThinkingBlocks(await chatCompletion({
+  const rawResponse = await chatCompletion({
     provider: config.provider,
     model: config.model,
     apiKey: config.apiKey,
@@ -146,7 +148,8 @@ async function reviewIssue(issueNumber) {
     maxTokens: config.maxTokens,
     system: systemPrompt,
     messages,
-  }));
+  });
+  const response = normalizeReviewResponse(stripThinkingBlocks(rawResponse), { type: 'issue', title: issue.title });
 
   await postComment(config.repo, issueNumber, response, config.githubToken);
 }
