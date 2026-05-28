@@ -19,10 +19,11 @@ test('quality eval fixtures cover PR and issue review paths', () => {
   assert.deepEqual(fixtures.map((fixture) => fixture.id), [
     'pr-auth-bypass',
     'pr-large-plus-small',
+    'pr-linked-issue-context',
     'issue-vague-crash',
     'issue-ready-feature',
   ]);
-  assert.equal(fixtures.filter((fixture) => fixture.kind === 'pr').length, 2);
+  assert.equal(fixtures.filter((fixture) => fixture.kind === 'pr').length, 3);
   assert.equal(fixtures.filter((fixture) => fixture.kind === 'issue').length, 2);
 });
 
@@ -89,6 +90,44 @@ test('scoreQualityEvalResponse requires exact CR report heading level', () => {
   const score = scoreQualityEvalResponse(fixture, response);
 
   assert.equal(score.checks.find((check) => check.label === 'has CR report heading').pass, false);
+});
+
+test('linked issue fixture requires review to use acceptance criteria context', () => {
+  const fixture = buildQualityEvalFixtures().find((item) => item.id === 'pr-linked-issue-context');
+  const response = `## 代码评审报告: Add dry-run mode
+
+**风险等级:** 高
+**处理建议:** 请求修改
+**决策摘要:** PR misses the linked issue acceptance criteria.
+
+### 级联分析
+- 变更符号:
+- 受影响流程:
+- 变更集外调用方:
+- 置信度: degraded
+
+### 问题发现
+1. **[高] dry-run still posts PR reviews**
+   - 证据: linked Issue #77 acceptance criteria require dry-run to prevent issue comments and PR reviews, but scripts/review.mjs only skips issue comments.
+   - 受影响调用方/流程: dry-run PR review path
+   - 最小可行修复: gate both postComment and postPRReview when dry-run is enabled.
+
+### 行级发现
+- [scripts/review.mjs:8] dry-run is only checked before issue comments; apply it to PR reviews too.
+
+### Karpathy 评审
+- 假设:
+- 简洁性:
+- 变更范围:
+- 验证:
+
+### 缺失覆盖
+- Add a PR dry-run test.`;
+
+  const score = scoreQualityEvalResponse(fixture, response);
+
+  assert.equal(score.checks.find((check) => check.label === 'linked issue context is used').pass, true);
+  assert.equal(score.checks.find((check) => check.label === 'linked issue fixture recommends changes').pass, true);
 });
 
 test('getChangedNewLines parses added lines from unified diffs', () => {

@@ -123,11 +123,12 @@ At runtime, the action clones the skills repo and assembles the system prompt fr
 
 ### PR Review
 1. Initializes skills from `ceilf6/ceilf6-skills` submodule
-2. Fetches PR diff and metadata via GitHub API
-3. Truncates large diffs (>100KB) to focus on largest changes
-4. Assembles system prompt from `code-reviewer` skill
-5. Sends to LLM, extracts Chinese recommendation (`批准` / `评论` / `请求修改` / `需要人工判断`)
-6. Extracts inline findings and posts as PR review with line comments
+2. Fetches PR diff, metadata, and linked issue context via GitHub API
+3. Includes GitHub closing issues plus same-repo `#123` references from the PR title/body
+4. Truncates large diffs (>100KB) to focus on largest changes
+5. Assembles system prompt from `code-reviewer` skill
+6. Sends to LLM, extracts Chinese recommendation (`批准` / `评论` / `请求修改` / `需要人工判断`)
+7. Extracts inline findings and posts as PR review with line comments
 
 ### Issue Review
 1. Initializes skills from `ceilf6/ceilf6-skills` submodule
@@ -143,6 +144,34 @@ If you use a relay service (中转站) for API access, set `LLM_BASE_URL` to you
 - Anthropic-compatible relay: `https://your-relay.com/anthropic`
 
 The bot automatically normalizes the URL for the selected provider.
+
+### Private intranet models
+
+Repo Guard does not require self-hosted runners by default. Public users can
+keep using GitHub-hosted runners with public OpenAI-compatible or
+Anthropic-compatible endpoints.
+
+If a model endpoint is only reachable from your own machine or company network,
+run the repository workflow on a self-hosted runner that has access to that
+network, then point the existing provider settings at the private endpoint:
+
+```yaml
+jobs:
+  guard:
+    runs-on: [self-hosted, macOS, repo-guard-intranet]
+    steps:
+      - uses: ceilf6/repo-guard@main
+        with:
+          type: both
+          provider: anthropic
+          model: claude-opus-4-7-thinking
+          api-key: ${{ secrets.LLM_API_KEY }}
+          base-url: ${{ vars.LLM_BASE_URL }}
+```
+
+For public repositories, restrict self-hosted runner workflows to trusted
+events and actors. Do not let untrusted fork pull requests execute arbitrary
+code on a persistent local runner.
 
 ## Relationship with ceilf6-skills
 

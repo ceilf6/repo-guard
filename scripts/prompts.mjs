@@ -120,7 +120,47 @@ function formatFileStatus(status) {
   }
 }
 
-export function buildPRUserMessage(prInfo, files) {
+function formatLinkedIssueContext(linkedIssueContext) {
+  if (!linkedIssueContext) return '';
+
+  const issues = linkedIssueContext.issues || [];
+  const warnings = linkedIssueContext.warnings || [];
+  const lines = ['## 关联 Issue 上下文'];
+
+  for (const warning of warnings) {
+    lines.push(`> ⚠️ ${warning}`);
+  }
+
+  if (warnings.length > 0) {
+    lines.push('> 关联上下文获取不完整，级联置信度 degraded；不要在产品意图不清晰时给出强 approval。');
+  }
+
+  if (issues.length === 0) {
+    lines.push(warnings.length > 0 ? '未获取到可用关联 Issue。' : '未发现关联 Issue。');
+    return `${lines.join('\n')}\n\n`;
+  }
+
+  for (const issue of issues) {
+    lines.push('');
+    lines.push(`### Issue #${issue.number}: ${issue.title}`);
+    lines.push(`- 状态: ${issue.state || 'unknown'}`);
+    lines.push(`- 作者: ${issue.user || 'unknown'}`);
+    lines.push(`- 标签: ${(issue.labels || []).length > 0 ? issue.labels.join(', ') : '(无)'}`);
+    lines.push(`- URL: ${issue.url || '(无)'}`);
+    lines.push(`- 来源: ${(issue.sources || []).join(', ') || 'unknown'}`);
+    lines.push('');
+    lines.push('正文:');
+    lines.push(issue.body || '(空)');
+    if (issue.bodyTruncated) {
+      lines.push('');
+      lines.push('> ⚠️ Issue 正文已截断到 12000 字符。');
+    }
+  }
+
+  return `${lines.join('\n')}\n\n`;
+}
+
+export function buildPRUserMessage(prInfo, files, linkedIssueContext) {
   let diffText = '';
   let totalSize = 0;
   let truncated = false;
@@ -153,6 +193,7 @@ export function buildPRUserMessage(prInfo, files) {
     message += `## 描述\n${prInfo.body}\n\n`;
   }
 
+  message += formatLinkedIssueContext(linkedIssueContext);
   message += `## 变更文件\n${files.map((f) => `- ${f.filename} (${formatFileStatus(f.status)})`).join('\n')}\n\n`;
   const inlineTargets = formatChangedLineTargets(includedFiles);
   if (inlineTargets) {

@@ -7,6 +7,7 @@ import {
   isTriggeredByComment,
   mapRecommendationToEvent,
   resolveReviewType,
+  stripThinkingBlocks,
 } from '../scripts/review-logic.mjs';
 
 test('issue_comment on a pull request resolves to PR review and uses issue number', () => {
@@ -76,4 +77,18 @@ test('recommendation mapping supports blocking and non-blocking outcomes', () =>
   assert.equal(mapRecommendationToEvent('APPROVE'), 'APPROVE');
   assert.equal(mapRecommendationToEvent('REQUEST_CHANGES'), 'REQUEST_CHANGES');
   assert.equal(mapRecommendationToEvent('NEEDS_HUMAN'), 'COMMENT');
+});
+
+test('stripThinkingBlocks removes model thinking before publishing', () => {
+  const response = `
+<thinking>
+Private reasoning should not be posted.
+</thinking>
+
+## Issue 分析
+
+正文保留。
+`;
+
+  assert.equal(stripThinkingBlocks(response), '## Issue 分析\n\n正文保留。');
 });
