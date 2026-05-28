@@ -169,6 +169,21 @@ test('normalizeReviewResponse leaves markdown review responses unchanged', () =>
   assert.equal(normalizeReviewResponse(response, { type: 'pr' }), response);
 });
 
+test('normalizeReviewResponse wraps responses that prepend text before the PR contract', () => {
+  const response = `Here is the review:
+
+## 代码评审报告: Nested Contract
+
+**风险等级:** 低
+**处理建议:** 评论
+**决策摘要:** nested body`;
+
+  const normalized = normalizeReviewResponse(response, { type: 'pr', title: 'Nested Contract' });
+
+  assert.match(normalized, /^## 代码评审报告: Nested Contract/);
+  assert.doesNotMatch(normalized, /^Here is the review:/);
+});
+
 test('normalizeReviewResponse converts structured issue JSON into markdown contract', () => {
   const response = JSON.stringify({
     quality_score: '2/5',
@@ -189,4 +204,27 @@ test('normalizeReviewResponse converts structured issue JSON into markdown contr
   assert.match(normalized, /\*\*优先级建议:\*\* P1-高/);
   assert.match(normalized, /\*\*维护者下一步动作:\*\* 询问报告者/);
   assert.match(normalized, /### 建议\n- 请补充稳定复现步骤和错误日志。/);
+});
+
+test('normalizeReviewResponse converts localized issue JSON into markdown contract', () => {
+  const response = JSON.stringify({
+    质量评分: '5/5',
+    优先级建议: 'P3-低',
+    类型: '功能请求',
+    维护者下一步动作: '可以开始',
+    建议: ['无需报告者继续补充。'],
+    总结: '需求已经可执行。',
+  });
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: 'Add dry-run mode',
+  });
+
+  assert.match(normalized, /^## Issue 分析: Add dry-run mode/);
+  assert.match(normalized, /\*\*质量评分:\*\* 5\/5/);
+  assert.match(normalized, /\*\*优先级建议:\*\* P3-低/);
+  assert.match(normalized, /\*\*类型:\*\* 功能请求/);
+  assert.match(normalized, /\*\*维护者下一步动作:\*\* 可以开始/);
+  assert.match(normalized, /### 建议\n- 无需报告者继续补充。/);
 });

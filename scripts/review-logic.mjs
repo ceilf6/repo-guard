@@ -78,13 +78,13 @@ export function normalizeReviewResponse(response = '', context = {}) {
 
   const parsed = parseStandaloneJson(trimmed);
   if (context.type === 'pr') {
-    if (/^##\s+代码评审报告:/m.test(trimmed)) return trimmed;
+    if (trimmed.startsWith('## 代码评审报告:')) return trimmed;
     if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title);
     return formatUnstructuredPRReview(trimmed, context.title);
   }
 
   if (context.type === 'issue') {
-    if (/^##\s+Issue 分析:/m.test(trimmed)) return trimmed;
+    if (trimmed.startsWith('## Issue 分析:')) return trimmed;
     if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title);
     return formatUnstructuredIssueReview(trimmed, context.title);
   }
@@ -138,7 +138,13 @@ function looksLikeStructuredIssueReview(value) {
       'quality_score' in value ||
       'priority_suggestion' in value ||
       'maintainer_next_action' in value ||
-      'suggestions' in value
+      'suggestions' in value ||
+      '质量评分' in value ||
+      '优先级建议' in value ||
+      '维护者下一步动作' in value ||
+      '建议' in value ||
+      '类型' in value ||
+      '总结' in value
     ),
   );
 }
@@ -217,10 +223,10 @@ function formatStructuredIssueReview(review, title = 'Issue Review') {
   return [
     `## Issue 分析: ${title || 'Issue Review'}`,
     '',
-    `**质量评分:** ${formatQualityScore(review.quality_score || review.score)}`,
-    `**优先级建议:** ${formatPriority(review.priority_suggestion || review.priority)}`,
-    `**类型:** ${formatIssueType(review.issue_type || review.type)}`,
-    `**维护者下一步动作:** ${formatMaintainerAction(review.maintainer_next_action || review.next_action || review.action)}`,
+    `**质量评分:** ${formatQualityScore(review.quality_score || review.score || review['质量评分'])}`,
+    `**优先级建议:** ${formatPriority(review.priority_suggestion || review.priority || review['优先级建议'])}`,
+    `**类型:** ${formatIssueType(review.issue_type || review.type || review['类型'])}`,
+    `**维护者下一步动作:** ${formatMaintainerAction(review.maintainer_next_action || review.next_action || review.action || review['维护者下一步动作'])}`,
     '',
     '### 完整性',
     '- 问题陈述: 未在模型 JSON 中提供',
@@ -241,10 +247,10 @@ function formatStructuredIssueReview(review, title = 'Issue Review') {
     '- 依赖: 未在模型 JSON 中提供',
     '',
     '### 建议',
-    formatSuggestions(review.suggestions || review.recommendations || review.recommendation),
+    formatSuggestions(review.suggestions || review.recommendations || review.recommendation || review['建议']),
     '',
     '### 总结',
-    toSingleLine(review.summary || '模型返回了结构化 JSON，已归一化为 Repo Guard Markdown 契约。'),
+    toSingleLine(review.summary || review['总结'] || '模型返回了结构化 JSON，已归一化为 Repo Guard Markdown 契约。'),
   ].join('\n');
 }
 
