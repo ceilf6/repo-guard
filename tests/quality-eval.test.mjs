@@ -8,6 +8,7 @@ import {
   getEnvConfig,
   getChangedNewLines,
   getSuggestionsSection,
+  normalizeQualityEvalResponse,
   scoreQualityEvalResponse,
 } from '../scripts/evaluate-quality.mjs';
 
@@ -128,6 +129,26 @@ test('linked issue fixture requires review to use acceptance criteria context', 
 
   assert.equal(score.checks.find((check) => check.label === 'linked issue context is used').pass, true);
   assert.equal(score.checks.find((check) => check.label === 'linked issue fixture recommends changes').pass, true);
+});
+
+test('normalizeQualityEvalResponse applies publishing contract before scoring model output', () => {
+  const fixture = buildQualityEvalFixtures().find((item) => item.id === 'pr-auth-bypass');
+  const response = JSON.stringify({
+    行级发现: [{
+      文件: 'src/auth.js',
+      行号: 12,
+      严重性: '高',
+      问题: '缺少 token 时直接调用 next() 会绕过认证。',
+    }],
+  });
+
+  const normalized = normalizeQualityEvalResponse(fixture, response);
+  const score = scoreQualityEvalResponse(fixture, normalized);
+
+  assert.match(normalized, /^## 代码评审报告:/);
+  assert.equal(score.checks.find((check) => check.label === 'has recommendation marker').pass, true);
+  assert.equal(score.checks.find((check) => check.label === 'auth bypass recommends changes').pass, true);
+  assert.equal(score.checks.find((check) => check.label === 'auth bypass inline targets changed src/auth.js line').pass, true);
 });
 
 test('getChangedNewLines parses added lines from unified diffs', () => {

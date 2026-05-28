@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chatCompletion } from './llm-client.mjs';
 import { buildIssueUserMessage, buildPRUserMessage, getChangedNewLines, loadSystemPrompt } from './prompts.mjs';
-import { extractInlineComments, extractRecommendation } from './review-logic.mjs';
+import { extractInlineComments, extractRecommendation, normalizeReviewResponse, stripThinkingBlocks } from './review-logic.mjs';
 
 export { getChangedNewLines };
 
@@ -290,6 +290,13 @@ export function scoreQualityEvalResponse(fixture, response) {
   };
 }
 
+export function normalizeQualityEvalResponse(fixture, response) {
+  return normalizeReviewResponse(stripThinkingBlocks(response), {
+    type: fixture.kind,
+    title: fixture.title || fixture.id,
+  });
+}
+
 export async function runQualityEvaluation(config = getEnvConfig()) {
   validateConfig(config);
 
@@ -298,7 +305,7 @@ export async function runQualityEvaluation(config = getEnvConfig()) {
 
   const results = [];
   for (const fixture of buildQualityEvalFixtures()) {
-    const response = await chatCompletion({
+    const rawResponse = await chatCompletion({
       provider: config.provider,
       model: config.model,
       apiKey: config.apiKey,
@@ -307,6 +314,7 @@ export async function runQualityEvaluation(config = getEnvConfig()) {
       system: fixture.system,
       messages: [{ role: 'user', content: fixture.user }],
     });
+    const response = normalizeQualityEvalResponse(fixture, rawResponse);
     const score = scoreQualityEvalResponse(fixture, response);
     writeFileSync(join(runDir, `${fixture.id}.md`), response);
     results.push({
