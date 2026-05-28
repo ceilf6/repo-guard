@@ -77,10 +77,12 @@ export function normalizeReviewResponse(response = '', context = {}) {
   const trimmed = String(response || '').trim();
 
   const parsed = parseStandaloneJson(trimmed);
+  const jsonLike = looksLikeStandaloneJson(trimmed);
   if (context.type === 'pr') {
     if (trimmed.startsWith('## 代码评审报告:')) return trimmed;
     if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title);
     if (parsed) return formatUnknownJsonPRReview(parsed, context.title);
+    if (jsonLike) return formatInvalidJsonPRReview(context.title);
     return formatUnstructuredPRReview(trimmed, context.title);
   }
 
@@ -88,6 +90,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
     if (trimmed.startsWith('## Issue 分析:')) return trimmed;
     if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title);
     if (parsed) return formatUnknownJsonIssueReview(parsed, context.title);
+    if (jsonLike) return formatInvalidJsonIssueReview(context.title);
     return formatUnstructuredIssueReview(trimmed, context.title);
   }
 
@@ -96,13 +99,23 @@ export function normalizeReviewResponse(response = '', context = {}) {
 
 function parseStandaloneJson(response) {
   const json = unwrapJsonFence(response);
-  if (!json.startsWith('{') || !json.endsWith('}')) return null;
+  if (!looksLikeCompleteJsonValue(json)) return null;
 
   try {
     return JSON.parse(json);
   } catch {
     return null;
   }
+}
+
+function looksLikeStandaloneJson(response) {
+  const json = unwrapJsonFence(response);
+  return json.startsWith('{') || json.startsWith('[');
+}
+
+function looksLikeCompleteJsonValue(response) {
+  const json = String(response || '').trim();
+  return (json.startsWith('{') && json.endsWith('}')) || (json.startsWith('[') && json.endsWith(']'));
 }
 
 function unwrapJsonFence(response) {
@@ -222,13 +235,18 @@ function formatUnstructuredPRReview(response, title = 'PR Review') {
 }
 
 function formatUnknownJsonPRReview(review, title = 'PR Review') {
-  const findings = asArray(review.comments || review.review_comments || review.annotations);
-  const recommendation = firstPresent(review.recommendation, review.overall_recommendation, review.decision, review.result);
+  const findings = Array.isArray(review)
+    ? review
+    : asArray(review.comments || review.review_comments || review.annotations);
+  const recommendation = Array.isArray(review)
+    ? ''
+    : firstPresent(review.recommendation, review.overall_recommendation, review.decision, review.result);
+  const risk = Array.isArray(review) ? '' : (review.risk_level || review.risk || review.severity);
 
   return [
     `## 代码评审报告: ${title || 'PR Review'}`,
     '',
-    `**风险等级:** ${mapRiskLevel(review.risk_level || review.risk || review.severity, findings)}`,
+    `**风险等级:** ${mapRiskLevel(risk, findings)}`,
     `**处理建议:** ${mapRecommendationLabel(recommendation, findings)}`,
     '**决策摘要:** 模型返回了未识别 JSON schema，已归一化为 Repo Guard Markdown 契约。',
     '',
@@ -248,6 +266,40 @@ function formatUnknownJsonPRReview(review, title = 'PR Review') {
     '- 假设: 模型返回了未识别 JSON schema，发布前已做安全归一化。',
     '- 简洁性: 不发布原始 JSON；只保留可映射的 recommendation、risk 与行级发现。',
     '- 变更范围: 未在模型 JSON 中提供',
+    '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
+    '',
+    '### 缺失覆盖',
+    '- 模型未按 Markdown 契约输出，建议补充真实模型质量评估覆盖。',
+  ].join('\n');
+}
+
+function formatInvalidJsonPRReview(title = 'PR Review') {
+  return [
+    `## 代码评审报告: ${title || 'PR Review'}`,
+    '',
+    '**风险等级:** 中',
+    '**处理建议:** 需要人工判断',
+    '**决策摘要:** 模型返回了不可解析的 JSON-like 输出，已安全归一化为 Repo Guard Markdown 契约。',
+    '',
+    '### 级联分析',
+    '- 变更符号: 未在模型 JSON-like 输出中提供',
+    '- 受影响流程: GitHub 评论展示与后续解析',
+    '- 变更集外调用方: unknown',
+    '- 置信度: degraded',
+    '',
+    '### 问题发现',
+    '1. **[中] 模型输出是不可解析 JSON-like 内容**',
+    '   - 证据: 发布前检测到 JSON-like 输出，但无法安全解析；原文未发布。',
+    '   - 受影响调用方/流程: GitHub 评论展示与后续解析',
+    '   - 最小可行修复: 已使用安全 fallback，避免原始 JSON-like 内容泄漏到评论。',
+    '',
+    '### 行级发现',
+    '- 无明确变更行归属。',
+    '',
+    '### Karpathy 评审',
+    '- 假设: 模型返回了不可解析 JSON-like 输出，发布前已做安全归一化。',
+    '- 简洁性: 不发布原始 JSON-like 内容，避免格式污染后续解析。',
+    '- 变更范围: 未在模型 JSON-like 输出中提供',
     '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
     '',
     '### 缺失覆盖',
@@ -291,14 +343,19 @@ function formatStructuredIssueReview(review, title = 'Issue Review') {
 }
 
 function formatUnknownJsonIssueReview(review, title = 'Issue Review') {
-  const action = firstPresent(review.maintainer_next_action, review.next_action, review.next, review.action);
+  const action = Array.isArray(review)
+    ? ''
+    : firstPresent(review.maintainer_next_action, review.next_action, review.next, review.action);
+  const qualityScore = Array.isArray(review) ? '' : (review.quality_score || review.score);
+  const priority = Array.isArray(review) ? '' : (review.priority_suggestion || review.priority);
+  const issueType = Array.isArray(review) ? '' : (review.issue_type || review.type);
 
   return [
     `## Issue 分析: ${title || 'Issue Review'}`,
     '',
-    `**质量评分:** ${formatQualityScore(review.quality_score || review.score)}`,
-    `**优先级建议:** ${formatPriority(review.priority_suggestion || review.priority)}`,
-    `**类型:** ${formatIssueType(review.issue_type || review.type)}`,
+    `**质量评分:** ${formatQualityScore(qualityScore)}`,
+    `**优先级建议:** ${formatPriority(priority)}`,
+    `**类型:** ${formatIssueType(issueType)}`,
     `**维护者下一步动作:** ${formatMaintainerAction(action)}`,
     '',
     '### 完整性',
@@ -324,6 +381,41 @@ function formatUnknownJsonIssueReview(review, title = 'Issue Review') {
     '',
     '### 总结',
     '模型返回了未识别 JSON schema，已归一化为 Repo Guard Markdown 契约。',
+  ].join('\n');
+}
+
+function formatInvalidJsonIssueReview(title = 'Issue Review') {
+  return [
+    `## Issue 分析: ${title || 'Issue Review'}`,
+    '',
+    '**质量评分:** 2/5',
+    '**优先级建议:** P2-中',
+    '**类型:** 讨论',
+    '**维护者下一步动作:** 需要分诊决策',
+    '',
+    '### 完整性',
+    '- 问题陈述: 未在模型 JSON-like 输出中提供',
+    '- 复现步骤: 未在模型 JSON-like 输出中提供',
+    '- 预期与实际: 未在模型 JSON-like 输出中提供',
+    '- 环境信息: 未在模型 JSON-like 输出中提供',
+    '- 支撑证据: 未在模型 JSON-like 输出中提供',
+    '',
+    '### 清晰度',
+    '- 标题质量: 未在模型 JSON-like 输出中提供',
+    '- 单一关注点: 未在模型 JSON-like 输出中提供',
+    '- 表达精确度: 未在模型 JSON-like 输出中提供',
+    '- 范围: 未在模型 JSON-like 输出中提供',
+    '',
+    '### 可执行性',
+    '- 是否可开始: 需要维护者分诊',
+    '- 验收标准: 未在模型 JSON-like 输出中提供',
+    '- 依赖: 未在模型 JSON-like 输出中提供',
+    '',
+    '### 建议',
+    '- 模型返回了不可解析的 JSON-like 输出，已安全归一化为 Repo Guard Markdown 契约；需要人工查看原始模型配置或优化提示。',
+    '',
+    '### 总结',
+    '模型返回了不可解析的 JSON-like 输出，已安全归一化为 Repo Guard Markdown 契约。',
   ].join('\n');
 }
 

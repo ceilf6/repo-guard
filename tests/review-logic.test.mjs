@@ -170,6 +170,38 @@ test('normalizeReviewResponse safely wraps unknown PR JSON without leaking raw J
   assert.doesNotMatch(normalized, /"comments"/);
 });
 
+test('normalizeReviewResponse safely wraps PR JSON arrays without leaking raw JSON', () => {
+  const response = JSON.stringify([
+    { path: 'src/auth.js', line: 12, severity: 'high', message: 'auth bypass' },
+  ]);
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Array JSON',
+  });
+
+  assert.match(normalized, /^## 代码评审报告: Array JSON/);
+  assert.match(normalized, /\*\*风险等级:\*\* 高/);
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+  assert.match(normalized, /- \[src\/auth\.js:12\] auth bypass/);
+  assert.doesNotMatch(normalized, /^\[\{/m);
+  assert.doesNotMatch(normalized, /"path"/);
+});
+
+test('normalizeReviewResponse safely wraps malformed PR JSON-like output without leaking raw JSON', () => {
+  const response = '{"summary":"raw JSON should not appear","findings":[';
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Malformed JSON',
+  });
+
+  assert.match(normalized, /^## 代码评审报告: Malformed JSON/);
+  assert.match(normalized, /\*\*处理建议:\*\* 需要人工判断/);
+  assert.doesNotMatch(normalized, /raw JSON should not appear/);
+  assert.doesNotMatch(normalized, /\{"summary"/);
+});
+
 test('normalizeReviewResponse wraps non-contract PR markdown and preserves loose inline findings', () => {
   const response = `## PR Review
 
@@ -294,4 +326,34 @@ test('normalizeReviewResponse safely wraps unknown fenced issue JSON without lea
   assert.match(normalized, /\*\*维护者下一步动作:\*\* 询问报告者/);
   assert.doesNotMatch(normalized, /\{"next"/);
   assert.doesNotMatch(normalized, /"payload"/);
+});
+
+test('normalizeReviewResponse safely wraps issue JSON arrays without leaking raw JSON', () => {
+  const response = `\`\`\`json
+[{"suggestion":"ask reporter for logs"}]
+\`\`\``;
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: 'Array issue JSON',
+  });
+
+  assert.match(normalized, /^## Issue 分析: Array issue JSON/);
+  assert.match(normalized, /### 建议\n- 模型返回了未识别 JSON schema/);
+  assert.doesNotMatch(normalized, /^\[\{/m);
+  assert.doesNotMatch(normalized, /"suggestion"/);
+});
+
+test('normalizeReviewResponse safely wraps malformed issue JSON-like output without leaking raw JSON', () => {
+  const response = '[{"suggestion":"raw issue JSON should not appear"}';
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: 'Malformed issue JSON',
+  });
+
+  assert.match(normalized, /^## Issue 分析: Malformed issue JSON/);
+  assert.match(normalized, /\*\*维护者下一步动作:\*\* 需要分诊决策/);
+  assert.doesNotMatch(normalized, /raw issue JSON should not appear/);
+  assert.doesNotMatch(normalized, /^\[\{/m);
 });
