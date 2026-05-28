@@ -80,12 +80,14 @@ export function normalizeReviewResponse(response = '', context = {}) {
   if (context.type === 'pr') {
     if (trimmed.startsWith('## 代码评审报告:')) return trimmed;
     if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title);
+    if (parsed) return formatUnknownJsonPRReview(parsed, context.title);
     return formatUnstructuredPRReview(trimmed, context.title);
   }
 
   if (context.type === 'issue') {
     if (trimmed.startsWith('## Issue 分析:')) return trimmed;
     if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title);
+    if (parsed) return formatUnknownJsonIssueReview(parsed, context.title);
     return formatUnstructuredIssueReview(trimmed, context.title);
   }
 
@@ -219,6 +221,40 @@ function formatUnstructuredPRReview(response, title = 'PR Review') {
   ].join('\n');
 }
 
+function formatUnknownJsonPRReview(review, title = 'PR Review') {
+  const findings = asArray(review.comments || review.review_comments || review.annotations);
+  const recommendation = firstPresent(review.recommendation, review.overall_recommendation, review.decision, review.result);
+
+  return [
+    `## 代码评审报告: ${title || 'PR Review'}`,
+    '',
+    `**风险等级:** ${mapRiskLevel(review.risk_level || review.risk || review.severity, findings)}`,
+    `**处理建议:** ${mapRecommendationLabel(recommendation, findings)}`,
+    '**决策摘要:** 模型返回了未识别 JSON schema，已归一化为 Repo Guard Markdown 契约。',
+    '',
+    '### 级联分析',
+    '- 变更符号: 未在模型 JSON 中提供',
+    '- 受影响流程: 未在模型 JSON 中提供',
+    '- 变更集外调用方: unknown',
+    '- 置信度: degraded',
+    '',
+    '### 问题发现',
+    formatFindings(findings),
+    '',
+    '### 行级发现',
+    formatInlineFindings(findings),
+    '',
+    '### Karpathy 评审',
+    '- 假设: 模型返回了未识别 JSON schema，发布前已做安全归一化。',
+    '- 简洁性: 不发布原始 JSON；只保留可映射的 recommendation、risk 与行级发现。',
+    '- 变更范围: 未在模型 JSON 中提供',
+    '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
+    '',
+    '### 缺失覆盖',
+    '- 模型未按 Markdown 契约输出，建议补充真实模型质量评估覆盖。',
+  ].join('\n');
+}
+
 function formatStructuredIssueReview(review, title = 'Issue Review') {
   return [
     `## Issue 分析: ${title || 'Issue Review'}`,
@@ -251,6 +287,43 @@ function formatStructuredIssueReview(review, title = 'Issue Review') {
     '',
     '### 总结',
     toSingleLine(review.summary || review['总结'] || '模型返回了结构化 JSON，已归一化为 Repo Guard Markdown 契约。'),
+  ].join('\n');
+}
+
+function formatUnknownJsonIssueReview(review, title = 'Issue Review') {
+  const action = firstPresent(review.maintainer_next_action, review.next_action, review.next, review.action);
+
+  return [
+    `## Issue 分析: ${title || 'Issue Review'}`,
+    '',
+    `**质量评分:** ${formatQualityScore(review.quality_score || review.score)}`,
+    `**优先级建议:** ${formatPriority(review.priority_suggestion || review.priority)}`,
+    `**类型:** ${formatIssueType(review.issue_type || review.type)}`,
+    `**维护者下一步动作:** ${formatMaintainerAction(action)}`,
+    '',
+    '### 完整性',
+    '- 问题陈述: 未在模型 JSON 中提供',
+    '- 复现步骤: 未在模型 JSON 中提供',
+    '- 预期与实际: 未在模型 JSON 中提供',
+    '- 环境信息: 未在模型 JSON 中提供',
+    '- 支撑证据: 未在模型 JSON 中提供',
+    '',
+    '### 清晰度',
+    '- 标题质量: 未在模型 JSON 中提供',
+    '- 单一关注点: 未在模型 JSON 中提供',
+    '- 表达精确度: 未在模型 JSON 中提供',
+    '- 范围: 未在模型 JSON 中提供',
+    '',
+    '### 可执行性',
+    '- 是否可开始: 未在模型 JSON 中提供',
+    '- 验收标准: 未在模型 JSON 中提供',
+    '- 依赖: 未在模型 JSON 中提供',
+    '',
+    '### 建议',
+    '- 模型返回了未识别 JSON schema，已归一化为 Repo Guard Markdown 契约；需要人工查看原始模型配置或优化提示。',
+    '',
+    '### 总结',
+    '模型返回了未识别 JSON schema，已归一化为 Repo Guard Markdown 契约。',
   ].join('\n');
 }
 

@@ -153,6 +153,23 @@ test('normalizeReviewResponse converts localized PR JSON into inline markdown fi
   assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
 });
 
+test('normalizeReviewResponse safely wraps unknown PR JSON without leaking raw JSON', () => {
+  const response = JSON.stringify({
+    overall_recommendation: 'REQUEST_CHANGES',
+    comments: [{ path: 'src/auth.js', line: 12, message: 'auth bypass' }],
+  });
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Unknown JSON',
+  });
+
+  assert.match(normalized, /^## 代码评审报告: Unknown JSON/);
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+  assert.doesNotMatch(normalized, /\{"overall_recommendation"/);
+  assert.doesNotMatch(normalized, /"comments"/);
+});
+
 test('normalizeReviewResponse wraps non-contract PR markdown and preserves loose inline findings', () => {
   const response = `## PR Review
 
@@ -261,4 +278,20 @@ test('normalizeReviewResponse converts localized issue JSON into markdown contra
   assert.match(normalized, /\*\*类型:\*\* 功能请求/);
   assert.match(normalized, /\*\*维护者下一步动作:\*\* 可以开始/);
   assert.match(normalized, /### 建议\n- 无需报告者继续补充。/);
+});
+
+test('normalizeReviewResponse safely wraps unknown fenced issue JSON without leaking raw JSON', () => {
+  const response = `\`\`\`json
+{"next":"ask reporter","payload":{"missing":"logs"}}
+\`\`\``;
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: 'Unknown issue JSON',
+  });
+
+  assert.match(normalized, /^## Issue 分析: Unknown issue JSON/);
+  assert.match(normalized, /\*\*维护者下一步动作:\*\* 询问报告者/);
+  assert.doesNotMatch(normalized, /\{"next"/);
+  assert.doesNotMatch(normalized, /"payload"/);
 });
