@@ -305,6 +305,7 @@ function mapRiskLevel(value, findings = []) {
 function mapRecommendationLabel(value, findings) {
   const text = String(value || '').toLowerCase();
   const normalized = normalizeToken(value);
+  if (hasNegatedApproval(text)) return '请求修改';
   if (normalized === 'REQUEST_CHANGES' || /request[_ -]?changes|请求修改|block|blocking|must fix/.test(text)) return '请求修改';
   if (normalized === 'NEEDS_HUMAN' || /needs[_ -]?human|human|人工/.test(text)) return '需要人工判断';
   if (normalized === 'APPROVE' || /approve|批准|可以合并/.test(text)) return '批准';
@@ -364,6 +365,7 @@ function inferRiskLevelFromText(text, findings = []) {
 }
 
 function inferRecommendationFromText(text, findings = []) {
+  if (hasNegatedApproval(text)) return '请求修改';
   if (/请求修改|需要修改|修改后再合并|不能合并|request[_ -]?changes/i.test(text)) return '请求修改';
   if (/需要人工判断|人工判断|needs[_ -]?human/i.test(text)) return '需要人工判断';
   if (/批准|可以合并|approve/i.test(text)) return '批准';
@@ -417,9 +419,10 @@ function extractLooseInlineFindings(response) {
   const lines = String(response || '').split(/\r?\n/);
   const findings = [];
   const pattern = /^\s*[-*]?\s*(?:\*\*)?`?([\w./-]+):(\d+)`?(?:\*\*)?\s*(.*)$/;
+  const bracketPattern = /^\s*[-*]?\s*(?:\*\*)?\[([\w./-]+):(\d+)\](?:\*\*)?\s*(.*)$/;
 
   for (let index = 0; index < lines.length; index++) {
-    const match = lines[index].match(pattern);
+    const match = lines[index].match(bracketPattern) || lines[index].match(pattern);
     if (!match) continue;
 
     const [, path, line, sameLineBody] = match;
@@ -432,6 +435,10 @@ function extractLooseInlineFindings(response) {
   }
 
   return findings;
+}
+
+function hasNegatedApproval(text) {
+  return /do\s+not\s+approve|not\s+approved|cannot\s+approve|can't\s+approve|don'?t\s+approve|不要批准|不应批准|不能批准|不可批准/i.test(text);
 }
 
 function formatFindings(findings) {

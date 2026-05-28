@@ -115,6 +115,22 @@ test('normalizeReviewResponse converts structured PR JSON into markdown contract
   assert.equal(extractRecommendation(normalized), 'APPROVE');
 });
 
+test('normalizeReviewResponse does not approve negated structured recommendations', () => {
+  const response = JSON.stringify({
+    summary: 'Authentication is still bypassed.',
+    risk_level: 'HIGH',
+    recommendation: 'Do not approve until auth is fixed.',
+  });
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Make auth permissive',
+  });
+
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+  assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
+});
+
 test('normalizeReviewResponse converts localized PR JSON into inline markdown findings', () => {
   const response = JSON.stringify({
     行级发现: [{
@@ -157,6 +173,24 @@ test('normalizeReviewResponse wraps non-contract PR markdown and preserves loose
   assert.match(normalized, /^## 代码评审报告: Fix ID parsing/);
   assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
   assert.match(normalized, /- \[src\/parse-id\.js:2\] parseInt 会接受部分数字字符串。/);
+});
+
+test('normalizeReviewResponse preserves bracket inline findings in non-contract PR markdown', () => {
+  const response = `Review follows:
+
+### 行级发现
+- [src/auth.js:12] Missing token now falls through to next().
+
+Do not approve until auth is fixed.`;
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Make auth permissive',
+  });
+
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+  assert.match(normalized, /- \[src\/auth\.js:12\] Missing token now falls through to next\(\)\./);
+  assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
 });
 
 test('normalizeReviewResponse leaves markdown review responses unchanged', () => {
