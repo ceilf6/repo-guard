@@ -79,7 +79,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
   const parsed = parseStandaloneJson(trimmed);
   const jsonLike = looksLikeStandaloneJson(trimmed);
   if (context.type === 'pr') {
-    if (trimmed.startsWith('## 代码评审报告:')) return trimmed;
+    if (isValidPRMarkdownContract(trimmed)) return trimmed;
     if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title);
     if (parsed) return formatUnknownJsonPRReview(parsed, context.title);
     if (jsonLike) return formatInvalidJsonPRReview(context.title);
@@ -87,7 +87,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
   }
 
   if (context.type === 'issue') {
-    if (trimmed.startsWith('## Issue 分析:')) return trimmed;
+    if (isValidIssueMarkdownContract(trimmed)) return trimmed;
     if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title);
     if (parsed) return formatUnknownJsonIssueReview(parsed, context.title);
     if (jsonLike) return formatInvalidJsonIssueReview(context.title);
@@ -121,6 +121,74 @@ function looksLikeCompleteJsonValue(response) {
 function unwrapJsonFence(response) {
   const fence = response.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i);
   return (fence ? fence[1] : response).trim();
+}
+
+function isValidPRMarkdownContract(markdown) {
+  return Boolean(
+    markdown.startsWith('## 代码评审报告:') &&
+    !containsRawJsonBlob(markdown) &&
+    hasAllPatterns(markdown, [
+      /\*\*风险等级:\*\*\s*\S+/,
+      /\*\*处理建议:\*\*\s*(批准|评论|请求修改|需要人工判断)/,
+      /\*\*决策摘要:\*\*\s*\S+/,
+    ]) &&
+    hasAllSections(markdown, ['级联分析', '问题发现', '行级发现', 'Karpathy 评审', '缺失覆盖']) &&
+    hasValidInlineFindingsSection(markdown),
+  );
+}
+
+function isValidIssueMarkdownContract(markdown) {
+  return Boolean(
+    markdown.startsWith('## Issue 分析:') &&
+    !containsRawJsonBlob(markdown) &&
+    hasAllPatterns(markdown, [
+      /\*\*质量评分:\*\*\s*\S+/,
+      /\*\*优先级建议:\*\*\s*\S+/,
+      /\*\*类型:\*\*\s*\S+/,
+      /\*\*维护者下一步动作:\*\*\s*\S+/,
+    ]) &&
+    hasAllSections(markdown, ['完整性', '清晰度', '可执行性', '建议', '总结']),
+  );
+}
+
+function hasAllPatterns(text, patterns) {
+  return patterns.every((pattern) => pattern.test(text));
+}
+
+function hasAllSections(markdown, sections) {
+  return sections.every((section) => new RegExp(`^### ${escapeRegExp(section)}\\s*$`, 'm').test(markdown));
+}
+
+function hasValidInlineFindingsSection(markdown) {
+  const section = extractMarkdownSection(markdown, '行级发现');
+  if (!section) return false;
+
+  return section
+    .split(/\r?\n/)
+    .some((line) => /^\s*-\s+无明确变更行归属。/.test(line) || /^\s*-\s+\[[^\]\n]+:\d+\]\s+\S+/.test(line));
+}
+
+function extractMarkdownSection(markdown, heading) {
+  const pattern = new RegExp(`^### ${escapeRegExp(heading)}\\s*$([\\s\\S]*?)(?=^###\\s+|(?![\\s\\S]))`, 'm');
+  const match = markdown.match(pattern);
+  return match ? match[1].trim() : '';
+}
+
+function containsRawJsonBlob(markdown) {
+  const fencePattern = /```(?:json)?\s*\n([\s\S]*?)\n```/gi;
+  let fence;
+  while ((fence = fencePattern.exec(markdown)) !== null) {
+    if (looksLikeStandaloneJson(fence[1])) return true;
+  }
+
+  return markdown
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => looksLikeStandaloneJson(line) && /[{"\]]/.test(line));
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function looksLikeStructuredPRReview(value) {

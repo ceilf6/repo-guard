@@ -247,9 +247,58 @@ test('normalizeReviewResponse leaves markdown review responses unchanged', () =>
 
 **风险等级:** 低
 **处理建议:** 评论
-**决策摘要:** markdown body`;
+**决策摘要:** markdown body
+
+### 级联分析
+- 变更符号: none
+- 受影响流程: none
+- 变更集外调用方: unknown
+- 置信度: high
+
+### 问题发现
+未发现 blocking findings。
+
+### 行级发现
+- 无明确变更行归属。
+
+### Karpathy 评审
+- 假设: none
+- 简洁性: ok
+- 变更范围: small
+- 验证: tests
+
+### 缺失覆盖
+- none`;
 
   assert.equal(normalizeReviewResponse(response, { type: 'pr' }), response);
+});
+
+test('normalizeReviewResponse wraps incomplete PR contracts instead of passing them through', () => {
+  const response = `## 代码评审报告: Incomplete
+
+This starts with the right heading but lacks the contract fields.`;
+
+  const normalized = normalizeReviewResponse(response, { type: 'pr', title: 'Incomplete' });
+
+  assert.notEqual(normalized, response);
+  assert.match(normalized, /^## 代码评审报告: Incomplete/);
+  assert.match(normalized, /\*\*风险等级:\*\*/);
+  assert.match(normalized, /### 行级发现/);
+});
+
+test('normalizeReviewResponse wraps PR contract headings with raw JSON bodies', () => {
+  const response = `## 代码评审报告: JSON Body
+
+\`\`\`json
+{"summary":"raw body should not leak"}
+\`\`\``;
+
+  const normalized = normalizeReviewResponse(response, { type: 'pr', title: 'JSON Body' });
+
+  assert.notEqual(normalized, response);
+  assert.match(normalized, /^## 代码评审报告: JSON Body/);
+  assert.doesNotMatch(normalized, /raw body should not leak/);
+  assert.doesNotMatch(normalized, /\{"summary"/);
 });
 
 test('normalizeReviewResponse wraps responses that prepend text before the PR contract', () => {
@@ -326,6 +375,67 @@ test('normalizeReviewResponse safely wraps unknown fenced issue JSON without lea
   assert.match(normalized, /\*\*维护者下一步动作:\*\* 询问报告者/);
   assert.doesNotMatch(normalized, /\{"next"/);
   assert.doesNotMatch(normalized, /"payload"/);
+});
+
+test('normalizeReviewResponse leaves markdown issue responses unchanged', () => {
+  const response = `## Issue 分析: Already Markdown
+
+**质量评分:** 4/5
+**优先级建议:** P2-中
+**类型:** 缺陷报告
+**维护者下一步动作:** 询问报告者
+
+### 完整性
+- 问题陈述: clear
+- 复现步骤: present
+- 预期与实际: present
+- 环境信息: present
+- 支撑证据: present
+
+### 清晰度
+- 标题质量: ok
+- 单一关注点: ok
+- 表达精确度: ok
+- 范围: scoped
+
+### 可执行性
+- 是否可开始: yes
+- 验收标准: present
+- 依赖: none
+
+### 建议
+- Ask for one missing log.
+
+### 总结
+Contract is complete.`;
+
+  assert.equal(normalizeReviewResponse(response, { type: 'issue' }), response);
+});
+
+test('normalizeReviewResponse wraps incomplete issue contracts instead of passing them through', () => {
+  const response = `## Issue 分析: Incomplete
+
+This starts with the right heading but lacks the issue contract fields.`;
+
+  const normalized = normalizeReviewResponse(response, { type: 'issue', title: 'Incomplete issue' });
+
+  assert.notEqual(normalized, response);
+  assert.match(normalized, /^## Issue 分析: Incomplete issue/);
+  assert.match(normalized, /\*\*质量评分:\*\*/);
+  assert.match(normalized, /### 建议/);
+});
+
+test('normalizeReviewResponse wraps issue contract headings with raw JSON bodies', () => {
+  const response = `## Issue 分析: JSON Body
+
+{"suggestion":"raw issue body should not leak"}`;
+
+  const normalized = normalizeReviewResponse(response, { type: 'issue', title: 'JSON Body' });
+
+  assert.notEqual(normalized, response);
+  assert.match(normalized, /^## Issue 分析: JSON Body/);
+  assert.doesNotMatch(normalized, /raw issue body should not leak/);
+  assert.doesNotMatch(normalized, /\{"suggestion"/);
 });
 
 test('normalizeReviewResponse safely wraps issue JSON arrays without leaking raw JSON', () => {
