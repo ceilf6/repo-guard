@@ -123,22 +123,22 @@ test('normalizeReviewResponse converts structured PR JSON into markdown contract
   assert.match(normalized, /\*\*处理建议:\*\* 批准/);
   assert.match(normalized, /\*\*决策摘要:\*\* The PR appears aligned with Issue #98\./);
   assert.match(normalized, /### 问题发现\n未发现 blocking findings。/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /"recommendation"\s*:\s*"Approve after normal CR\."/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /"recommendation"\s*:\s*"Approve after normal CR\."/);
   assert.equal(extractRecommendation(normalized), 'APPROVE');
 });
 
-test('normalizeReviewResponse preserves structured PR JSON original text instead of canonicalizing it', () => {
+test('normalizeReviewResponse does not leak structured PR JSON original text', () => {
   const response = '```json\n{\n  "summary": "Fenced structured JSON",\n  "findings": [],\n  "risk_level": "LOW",\n  "recommendation": "COMMENT"\n}\n```';
 
   const normalized = normalizeReviewResponse(response, {
     type: 'pr',
     title: 'Fenced structured JSON',
   });
-  const originalSection = normalized.slice(normalized.indexOf('### 原始模型输出'));
 
-  assert.match(originalSection, /````text\n```json\n\{\n  "summary": "Fenced structured JSON"/);
-  assert.match(originalSection, /\n```\n````$/);
+  assert.match(normalized, /\*\*决策摘要:\*\* Fenced structured JSON/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /```json/);
 });
 
 test('normalizeReviewResponse does not approve negated structured recommendations', () => {
@@ -202,7 +202,7 @@ test('normalizeReviewResponse converts localized PR JSON into inline markdown fi
   assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
 });
 
-test('normalizeReviewResponse wraps unknown PR JSON and preserves original output in a dedicated section', () => {
+test('normalizeReviewResponse wraps unknown PR JSON without leaking original output', () => {
   const response = JSON.stringify({
     overall_recommendation: 'REQUEST_CHANGES',
     comments: [{ path: 'src/auth.js', line: 12, message: 'auth bypass' }],
@@ -215,12 +215,12 @@ test('normalizeReviewResponse wraps unknown PR JSON and preserves original outpu
 
   assert.match(normalized, /^## 代码评审报告: Unknown JSON/);
   assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /"overall_recommendation"\s*:\s*"REQUEST_CHANGES"/);
-  assert.match(normalized, /"comments"\s*:\s*\[/);
+  assert.match(normalized, /- \[src\/auth\.js:12\] auth bypass/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /"overall_recommendation"\s*:\s*"REQUEST_CHANGES"/);
 });
 
-test('normalizeReviewResponse wraps PR JSON arrays and preserves original output in a dedicated section', () => {
+test('normalizeReviewResponse wraps PR JSON arrays without leaking original output', () => {
   const response = JSON.stringify([
     { path: 'src/auth.js', line: 12, severity: 'high', message: 'auth bypass' },
   ]);
@@ -234,11 +234,11 @@ test('normalizeReviewResponse wraps PR JSON arrays and preserves original output
   assert.match(normalized, /\*\*风险等级:\*\* 高/);
   assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
   assert.match(normalized, /- \[src\/auth\.js:12\] auth bypass/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /"path"\s*:\s*"src\/auth.js"/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /"path"\s*:\s*"src\/auth.js"/);
 });
 
-test('normalizeReviewResponse preserves malformed PR JSON-like output in a dedicated section', () => {
+test('normalizeReviewResponse wraps malformed PR JSON-like output without leaking it', () => {
   const response = '{"summary":"raw JSON should not appear","findings":[';
 
   const normalized = normalizeReviewResponse(response, {
@@ -248,9 +248,9 @@ test('normalizeReviewResponse preserves malformed PR JSON-like output in a dedic
 
   assert.match(normalized, /^## 代码评审报告: Malformed JSON/);
   assert.match(normalized, /\*\*处理建议:\*\* 需要人工判断/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /raw JSON should not appear/);
-  assert.match(normalized, /\{"summary"/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /raw JSON should not appear/);
+  assert.doesNotMatch(normalized, /\{"summary"/);
 });
 
 test('normalizeReviewResponse wraps non-contract PR markdown and preserves loose inline findings', () => {
@@ -273,8 +273,7 @@ test('normalizeReviewResponse wraps non-contract PR markdown and preserves loose
   assert.match(normalized, /^## 代码评审报告: Fix ID parsing/);
   assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
   assert.match(normalized, /- \[src\/parse-id\.js:2\] parseInt 会接受部分数字字符串。/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /建议修改后再合并。/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
 });
 
 test('normalizeReviewResponse keeps useful plain-text PR review details', () => {
@@ -301,8 +300,7 @@ test('normalizeReviewResponse keeps useful plain-text PR review details', () => 
   assert.match(normalized, /1\. \*\*\[高\] 训练数据缓存包含敏感 token\*\*/);
   assert.match(normalized, /证据: scripts\/fine-tune\.mjs 将 HF_TOKEN 拼进 dataset-cache\.json。/);
   assert.match(normalized, /最小可行修复: 写缓存前移除 token，并补充回归测试。/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /代码评审报告: feat: add subtitle LLM fine-tuning pipeline/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
   assert.doesNotMatch(normalized, /模型输出未遵循 Repo Guard 契约/);
 });
 
@@ -324,10 +322,9 @@ test('normalizeReviewResponse keeps inline findings when loose findings are also
     type: 'pr',
     title: 'Make auth permissive',
   });
-  const normalizedBody = normalized.split('\n### 原始模型输出\n')[0];
 
-  assert.match(normalizedBody, /1\. \*\*\[高\] Auth middleware can bypass token checks\*\*/);
-  assert.match(normalizedBody, /- \[src\/auth\.js:12\] Missing token falls through to next\(\)\./);
+  assert.match(normalized, /1\. \*\*\[高\] Auth middleware can bypass token checks\*\*/);
+  assert.match(normalized, /- \[src\/auth\.js:12\] Missing token falls through to next\(\)\./);
 });
 
 test('normalizeReviewResponse keeps loose finding evidence scoped to each finding block', () => {
@@ -350,11 +347,10 @@ test('normalizeReviewResponse keeps loose finding evidence scoped to each findin
     type: 'pr',
     title: 'Fix auth and cache',
   });
-  const normalizedBody = normalized.split('\n### 原始模型输出\n')[0];
 
-  assert.match(normalizedBody, /1\. \*\*\[高\] Auth middleware can bypass token checks\*\*[\s\S]*证据: src\/auth\.js calls next\(\) without a token\.[\s\S]*最小可行修复: Return 401 before calling next\(\)\./);
-  assert.match(normalizedBody, /2\. \*\*\[中\] Cache writes stale subtitle entries\*\*[\s\S]*证据: src\/cache\.js stores subtitles under a replay-agnostic key\.[\s\S]*最小可行修复: Include replayId in the cache key\./);
-  assert.doesNotMatch(normalizedBody, /Cache writes stale subtitle entries\*\*[\s\S]*证据: src\/auth\.js calls next\(\) without a token\./);
+  assert.match(normalized, /1\. \*\*\[高\] Auth middleware can bypass token checks\*\*[\s\S]*证据: src\/auth\.js calls next\(\) without a token\.[\s\S]*最小可行修复: Return 401 before calling next\(\)\./);
+  assert.match(normalized, /2\. \*\*\[中\] Cache writes stale subtitle entries\*\*[\s\S]*证据: src\/cache\.js stores subtitles under a replay-agnostic key\.[\s\S]*最小可行修复: Include replayId in the cache key\./);
+  assert.doesNotMatch(normalized, /Cache writes stale subtitle entries\*\*[\s\S]*证据: src\/auth\.js calls next\(\) without a token\./);
 });
 
 test('normalizeReviewResponse does not promote fallback placeholder findings as review findings', () => {
@@ -373,18 +369,17 @@ test('normalizeReviewResponse does not promote fallback placeholder findings as 
     type: 'pr',
     title: 'feat: add subtitle LLM fine-tuning pipeline',
   });
-  const normalizedBody = normalized.split('\n### 原始模型输出\n')[0];
 
-  assert.match(normalized, /### 原始模型输出/);
-  assert.doesNotMatch(normalizedBody, /模型输出未遵循 Repo Guard 契约/);
-  assert.doesNotMatch(normalizedBody, /最小可行修复: 已在发布前归一化为固定 Markdown 契约/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /模型输出未遵循 Repo Guard 契约/);
+  assert.doesNotMatch(normalized, /最小可行修复: 已在发布前归一化为固定 Markdown 契约/);
 });
 
-test('normalizeReviewResponse keeps original output sections idempotent even when they contain headings and JSON', () => {
+test('normalizeReviewResponse stays idempotent and does not leak JSON from non-contract markdown', () => {
   const response = `## PR Review
 
 ### Notes
-{"summary":"raw JSON should stay only in original output"}
+{"summary":"raw JSON should stay out of the published comment"}
 
 建议人工判断。`;
 
@@ -397,8 +392,8 @@ test('normalizeReviewResponse keeps original output sections idempotent even whe
     title: 'Original output idempotency',
   });
 
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /\{"summary":"raw JSON should stay only in original output"\}/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /\{"summary":"raw JSON should stay out of the published comment"\}/);
   assert.equal(renormalized, normalized);
 });
 
@@ -493,7 +488,7 @@ This starts with the right heading but lacks the contract fields.`;
   assert.match(normalized, /### 行级发现/);
 });
 
-test('normalizeReviewResponse wraps PR contract headings with raw JSON bodies', () => {
+test('normalizeReviewResponse wraps PR contract headings with raw JSON bodies without leaking them', () => {
   const response = `## 代码评审报告: JSON Body
 
 \`\`\`json
@@ -504,9 +499,9 @@ test('normalizeReviewResponse wraps PR contract headings with raw JSON bodies', 
 
   assert.notEqual(normalized, response);
   assert.match(normalized, /^## 代码评审报告: JSON Body/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /raw body should not leak/);
-  assert.match(normalized, /\{"summary"/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /raw body should not leak/);
+  assert.doesNotMatch(normalized, /\{"summary"/);
 });
 
 test('normalizeReviewResponse wraps responses that prepend text before the PR contract', () => {
@@ -569,7 +564,7 @@ test('normalizeReviewResponse converts localized issue JSON into markdown contra
   assert.match(normalized, /### 建议\n- 无需报告者继续补充。/);
 });
 
-test('normalizeReviewResponse wraps unknown fenced issue JSON and preserves original output in a dedicated section', () => {
+test('normalizeReviewResponse wraps unknown fenced issue JSON without leaking original output', () => {
   const response = `\`\`\`json
 {"next":"ask reporter","payload":{"missing":"logs"}}
 \`\`\``;
@@ -581,9 +576,9 @@ test('normalizeReviewResponse wraps unknown fenced issue JSON and preserves orig
 
   assert.match(normalized, /^## Issue 分析: Unknown issue JSON/);
   assert.match(normalized, /\*\*维护者下一步动作:\*\* 询问报告者/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /"next"\s*:\s*"ask reporter"/);
-  assert.match(normalized, /"payload"\s*:\s*\{/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /"next"\s*:\s*"ask reporter"/);
+  assert.doesNotMatch(normalized, /"payload"\s*:\s*\{/);
 });
 
 test('normalizeReviewResponse leaves markdown issue responses unchanged', () => {
@@ -634,7 +629,7 @@ This starts with the right heading but lacks the issue contract fields.`;
   assert.match(normalized, /### 建议/);
 });
 
-test('normalizeReviewResponse wraps issue contract headings with raw JSON bodies', () => {
+test('normalizeReviewResponse wraps issue contract headings with raw JSON bodies without leaking them', () => {
   const response = `## Issue 分析: JSON Body
 
 {"suggestion":"raw issue body should not leak"}`;
@@ -643,12 +638,12 @@ test('normalizeReviewResponse wraps issue contract headings with raw JSON bodies
 
   assert.notEqual(normalized, response);
   assert.match(normalized, /^## Issue 分析: JSON Body/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /raw issue body should not leak/);
-  assert.match(normalized, /\{"suggestion"/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /raw issue body should not leak/);
+  assert.doesNotMatch(normalized, /\{"suggestion"/);
 });
 
-test('normalizeReviewResponse preserves issue JSON arrays in a dedicated section', () => {
+test('normalizeReviewResponse wraps issue JSON arrays without leaking original output', () => {
   const response = `\`\`\`json
 [{"suggestion":"ask reporter for logs"}]
 \`\`\``;
@@ -660,11 +655,11 @@ test('normalizeReviewResponse preserves issue JSON arrays in a dedicated section
 
   assert.match(normalized, /^## Issue 分析: Array issue JSON/);
   assert.match(normalized, /### 建议\n- 模型返回了未识别 JSON schema/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /"suggestion"\s*:\s*"ask reporter for logs"/);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /"suggestion"\s*:\s*"ask reporter for logs"/);
 });
 
-test('normalizeReviewResponse preserves malformed issue JSON-like output in a dedicated section', () => {
+test('normalizeReviewResponse wraps malformed issue JSON-like output without leaking it', () => {
   const response = '[{"suggestion":"raw issue JSON should not appear"}';
 
   const normalized = normalizeReviewResponse(response, {
@@ -674,7 +669,7 @@ test('normalizeReviewResponse preserves malformed issue JSON-like output in a de
 
   assert.match(normalized, /^## Issue 分析: Malformed issue JSON/);
   assert.match(normalized, /\*\*维护者下一步动作:\*\* 需要分诊决策/);
-  assert.match(normalized, /### 原始模型输出/);
-  assert.match(normalized, /raw issue JSON should not appear/);
-  assert.match(normalized, /^\[\{/m);
+  assert.doesNotMatch(normalized, /### 原始模型输出/);
+  assert.doesNotMatch(normalized, /raw issue JSON should not appear/);
+  assert.doesNotMatch(normalized, /^\[\{/m);
 });

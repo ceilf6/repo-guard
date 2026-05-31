@@ -86,17 +86,17 @@ export function normalizeReviewResponse(response = '', context = {}) {
   const jsonLike = looksLikeStandaloneJson(trimmed);
   if (context.type === 'pr') {
     if (isValidPRMarkdownContract(trimmed)) return trimmed;
-    if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title, trimmed);
-    if (parsed) return formatUnknownJsonPRReview(parsed, context.title, trimmed);
-    if (jsonLike) return formatInvalidJsonPRReview(context.title, trimmed);
+    if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title);
+    if (parsed) return formatUnknownJsonPRReview(parsed, context.title);
+    if (jsonLike) return formatInvalidJsonPRReview(context.title);
     return formatUnstructuredPRReview(trimmed, context.title);
   }
 
   if (context.type === 'issue') {
     if (isValidIssueMarkdownContract(trimmed)) return trimmed;
-    if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title, trimmed);
-    if (parsed) return formatUnknownJsonIssueReview(parsed, context.title, trimmed);
-    if (jsonLike) return formatInvalidJsonIssueReview(context.title, trimmed);
+    if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title);
+    if (parsed) return formatUnknownJsonIssueReview(parsed, context.title);
+    if (jsonLike) return formatInvalidJsonIssueReview(context.title);
     return formatUnstructuredIssueReview(trimmed, context.title);
   }
 
@@ -181,7 +181,7 @@ function extractMarkdownSection(markdown, heading) {
 }
 
 function containsRawJsonBlob(markdown) {
-  const scanTarget = stripOriginalOutputSections(markdown);
+  const scanTarget = String(markdown || '');
   const fencePattern = /```(?:json)?\s*\n([\s\S]*?)\n```/gi;
   let fence;
   while ((fence = fencePattern.exec(scanTarget)) !== null) {
@@ -192,12 +192,6 @@ function containsRawJsonBlob(markdown) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .some((line) => looksLikeStandaloneJson(line) && /[{"\]]/.test(line));
-}
-
-function stripOriginalOutputSections(markdown) {
-  const value = String(markdown || '');
-  const marker = /^### 原始模型输出\s*$/m.exec(value);
-  return marker ? value.slice(0, marker.index) : value;
 }
 
 function escapeRegExp(value) {
@@ -245,7 +239,7 @@ function looksLikeStructuredIssueReview(value) {
   );
 }
 
-function formatStructuredPRReview(review, title = 'PR Review', originalOutput = '') {
+function formatStructuredPRReview(review, title = 'PR Review') {
   const findings = [
     ...asArray(review.findings || review['问题发现']),
     ...asArray(review.inline_findings || review['行级发现']),
@@ -273,13 +267,12 @@ function formatStructuredPRReview(review, title = 'PR Review', originalOutput = 
     '',
     '### Karpathy 评审',
     '- 假设: 模型返回了非契约 JSON，发布前已做格式归一化。',
-    '- 简洁性: 原始 JSON 保留在专用 fenced 区块；正文提升 summary、findings 与 recommendation 的可读字段。',
+    '- 简洁性: 已提升 summary、findings 与 recommendation 的可读字段；原始 JSON 不再附在评论中，避免污染下游解析。',
     '- 变更范围: 未在模型 JSON 中提供',
     '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
     '',
     '### 缺失覆盖',
-    '- 输出未命中 Repo Guard Markdown 契约；已保留原文，建议补充真实模型质量评估覆盖。',
-    ...formatOriginalOutputSection(originalOutput),
+    '- 输出未命中 Repo Guard Markdown 契约；建议补充真实模型质量评估覆盖。',
   ].join('\n');
 }
 
@@ -297,8 +290,8 @@ function formatUnstructuredPRReview(response, title = 'PR Review') {
     `**决策摘要:** ${extractSummaryLine(response)}`,
     '',
     '### 级联分析',
-    '- 变更符号: 原始模型未提供结构化级联字段，详见“原始模型输出”。',
-    '- 受影响流程: 原始模型未提供结构化级联字段，详见“原始模型输出”。',
+    '- 变更符号: 原始模型未提供结构化级联字段。',
+    '- 受影响流程: 原始模型未提供结构化级联字段。',
     '- 变更集外调用方: unknown',
     '- 置信度: degraded',
     '',
@@ -309,18 +302,17 @@ function formatUnstructuredPRReview(response, title = 'PR Review') {
     formatInlineFindings(inlineFindings),
     '',
     '### Karpathy 评审',
-    '- 假设: 模型输出需要归一化为固定 Markdown 契约，原文已完整保留。',
-    '- 简洁性: 保留原始模型输出，并尽量提取 summary、finding、evidence 与 fix。',
-    '- 变更范围: 原始模型未提供结构化范围字段，详见“原始模型输出”。',
+    '- 假设: 模型输出需要归一化为固定 Markdown 契约。',
+    '- 简洁性: 已提取 summary、finding、evidence 与 fix；原始 prose 不再附在评论中，避免占用下游解析与代理上下文。',
+    '- 变更范围: 原始模型未提供结构化范围字段。',
     '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
     '',
     '### 缺失覆盖',
-    '- 输出未命中 Repo Guard Markdown 契约；已保留原文，建议补充真实模型质量评估覆盖。',
-    ...formatOriginalOutputSection(response),
+    '- 输出未命中 Repo Guard Markdown 契约；建议补充真实模型质量评估覆盖。',
   ].join('\n');
 }
 
-function formatUnknownJsonPRReview(review, title = 'PR Review', originalOutput = '') {
+function formatUnknownJsonPRReview(review, title = 'PR Review') {
   const findings = Array.isArray(review)
     ? review
     : asArray(review.comments || review.review_comments || review.annotations);
@@ -334,7 +326,7 @@ function formatUnknownJsonPRReview(review, title = 'PR Review', originalOutput =
     '',
     `**风险等级:** ${mapRiskLevel(risk, findings)}`,
     `**处理建议:** ${mapRecommendationLabel(recommendation, findings)}`,
-    '**决策摘要:** 模型返回了未识别 JSON schema；已保留原始 JSON 并归一化为 Repo Guard Markdown 契约。',
+    '**决策摘要:** 模型返回了未识别 JSON schema；已归一化为 Repo Guard Markdown 契约。',
     '',
     '### 级联分析',
     '- 变更符号: 未在模型 JSON 中提供',
@@ -350,17 +342,16 @@ function formatUnknownJsonPRReview(review, title = 'PR Review', originalOutput =
     '',
     '### Karpathy 评审',
     '- 假设: 模型返回了未识别 JSON schema，发布前已做安全归一化。',
-    '- 简洁性: 原始 JSON 保留在专用 fenced 区块；正文只提升可映射的 recommendation、risk 与行级发现。',
+    '- 简洁性: 只提升可映射的 recommendation、risk 与行级发现；原始 JSON 不再附在评论中，避免污染下游解析。',
     '- 变更范围: 未在模型 JSON 中提供',
     '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
     '',
     '### 缺失覆盖',
-    '- 输出未命中 Repo Guard Markdown 契约；已保留原文，建议补充真实模型质量评估覆盖。',
-    ...formatOriginalOutputSection(originalOutput),
+    '- 输出未命中 Repo Guard Markdown 契约；建议补充真实模型质量评估覆盖。',
   ].join('\n');
 }
 
-function formatInvalidJsonPRReview(title = 'PR Review', originalOutput = '') {
+function formatInvalidJsonPRReview(title = 'PR Review') {
   return [
     `## 代码评审报告: ${title || 'PR Review'}`,
     '',
@@ -376,26 +367,25 @@ function formatInvalidJsonPRReview(title = 'PR Review', originalOutput = '') {
     '',
     '### 问题发现',
     '1. **[中] 模型输出是不可解析 JSON-like 内容**',
-    '   - 证据: 发布前检测到 JSON-like 输出，但无法安全解析；原文已附在“原始模型输出”。',
+    '   - 证据: 发布前检测到 JSON-like 输出，但无法安全解析。',
     '   - 受影响调用方/流程: GitHub 评论展示与后续解析',
-    '   - 最小可行修复: 已使用契约外壳包裹原文，避免整条评论退化为不可解析输出。',
+    '   - 最小可行修复: 已使用契约外壳包裹，避免整条评论退化为不可解析输出；建议优化提示让模型直接遵循契约。',
     '',
     '### 行级发现',
     '- 无明确变更行归属。',
     '',
     '### Karpathy 评审',
     '- 假设: 模型返回了不可解析 JSON-like 输出，发布前已做安全归一化。',
-    '- 简洁性: 原始 JSON-like 内容保留在专用 fenced 区块，避免整条评论格式污染后续解析。',
+    '- 简洁性: 使用契约外壳包裹，避免整条评论格式污染后续解析；不可解析原文不再附在评论中。',
     '- 变更范围: 未在模型 JSON-like 输出中提供',
     '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
     '',
     '### 缺失覆盖',
-    '- 输出未命中 Repo Guard Markdown 契约；已保留原文，建议补充真实模型质量评估覆盖。',
-    ...formatOriginalOutputSection(originalOutput),
+    '- 输出未命中 Repo Guard Markdown 契约；建议补充真实模型质量评估覆盖。',
   ].join('\n');
 }
 
-function formatStructuredIssueReview(review, title = 'Issue Review', originalOutput = '') {
+function formatStructuredIssueReview(review, title = 'Issue Review') {
   return [
     `## Issue 分析: ${title || 'Issue Review'}`,
     '',
@@ -427,11 +417,10 @@ function formatStructuredIssueReview(review, title = 'Issue Review', originalOut
     '',
     '### 总结',
     toSingleLine(review.summary || review['总结'] || '模型返回了结构化 JSON，已归一化为 Repo Guard Markdown 契约。'),
-    ...formatOriginalOutputSection(originalOutput),
   ].join('\n');
 }
 
-function formatUnknownJsonIssueReview(review, title = 'Issue Review', originalOutput = '') {
+function formatUnknownJsonIssueReview(review, title = 'Issue Review') {
   const action = Array.isArray(review)
     ? ''
     : firstPresent(review.maintainer_next_action, review.next_action, review.next, review.action);
@@ -470,11 +459,10 @@ function formatUnknownJsonIssueReview(review, title = 'Issue Review', originalOu
     '',
     '### 总结',
     '模型返回了未识别 JSON schema，已归一化为 Repo Guard Markdown 契约。',
-    ...formatOriginalOutputSection(originalOutput),
   ].join('\n');
 }
 
-function formatInvalidJsonIssueReview(title = 'Issue Review', originalOutput = '') {
+function formatInvalidJsonIssueReview(title = 'Issue Review') {
   return [
     `## Issue 分析: ${title || 'Issue Review'}`,
     '',
@@ -506,7 +494,6 @@ function formatInvalidJsonIssueReview(title = 'Issue Review', originalOutput = '
     '',
     '### 总结',
     '模型返回了不可解析的 JSON-like 输出，已安全归一化为 Repo Guard Markdown 契约。',
-    ...formatOriginalOutputSection(originalOutput),
   ].join('\n');
 }
 
@@ -542,7 +529,6 @@ function formatUnstructuredIssueReview(response, title = 'Issue Review') {
     '',
     '### 总结',
     extractSummaryLine(response),
-    ...formatOriginalOutputSection(response),
   ].join('\n');
 }
 
@@ -668,13 +654,13 @@ function extractSummaryLine(text) {
   const line = String(text || '')
     .split(/\r?\n/)
     .map((item) => item.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim())
-    .find((item) => item && !/^```/.test(item) && !isReportTitleLine(item) && !isLooseMetadataLine(item));
+    .find((item) => item && !/^```/.test(item) && !looksLikeStandaloneJson(item) && !isReportTitleLine(item) && !isLooseMetadataLine(item));
   return toSingleLine(line || '模型未按输出契约返回，已归一化为 Repo Guard Markdown 契约。');
 }
 
 function formatOriginalResponseFinding(findings = []) {
   if (findings.length > 0) return formatFindings(findings);
-  return '未发现可结构化的问题发现；原始模型输出已保留在下方，供人工复核。';
+  return '模型未返回可结构化的问题发现；已提取可用的决策字段，原始非契约内容未附在评论中。';
 }
 
 function extractLooseFindings(response) {
@@ -730,33 +716,6 @@ function isLooseMetadataLine(line) {
 
 function isFallbackPlaceholderFindingTitle(title) {
   return /模型输出.*(?:未遵循|未遵守|未按).*?(?:Repo Guard\s*)?契约|模型输出是不可解析\s+JSON-like\s+内容|模型返回了未识别\s+JSON\s+schema/i.test(String(title || ''));
-}
-
-function formatOriginalOutputSection(output) {
-  const text = truncateOriginalOutput(String(output || '').trim());
-  if (!text) return [];
-  const fence = codeFenceFor(text);
-
-  return [
-    '',
-    '### 原始模型输出',
-    `${fence}text`,
-    text,
-    fence,
-  ];
-}
-
-function codeFenceFor(text) {
-  const runs = String(text || '').match(/`{3,}/g) || [];
-  if (runs.length === 0) return '```';
-  const maxRun = Math.max(...runs.map((run) => run.length));
-  return '`'.repeat(maxRun + 1);
-}
-
-function truncateOriginalOutput(text) {
-  const maxLength = 6000;
-  const value = String(text || '');
-  return value.length > maxLength ? `${value.slice(0, maxLength)}\n...[truncated]` : value;
 }
 
 function extractLooseInlineFindings(response) {
