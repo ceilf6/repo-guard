@@ -654,7 +654,7 @@ function extractSummaryLine(text) {
   const line = String(text || '')
     .split(/\r?\n/)
     .map((item) => item.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim())
-    .find((item) => item && !/^```/.test(item) && !looksLikeStandaloneJson(item) && !isReportTitleLine(item) && !isLooseMetadataLine(item));
+    .find((item) => item && !/^```/.test(item) && !looksLikeStandaloneJson(item) && !isReportTitleLine(item) && !isLooseMetadataLine(item) && !isPreambleLine(item));
   return toSingleLine(line || '模型未按输出契约返回，已归一化为 Repo Guard Markdown 契约。');
 }
 
@@ -712,6 +712,34 @@ function isReportTitleLine(line) {
 
 function isLooseMetadataLine(line) {
   return /^(?:风险等级|处理建议|决策摘要|质量评分|优先级建议|类型|维护者下一步动作|summary|recommendation|risk)\s*[:：]/i.test(String(line || '').trim());
+}
+
+// Model meta-narration about the *act* of reviewing/scoring (e.g. "I'm going to
+// score this issue against the rubric.") that is not wrapped in <thinking> tags
+// must not be promoted into the summary. Kept deliberately narrow: an opener
+// alone is not enough — the line must also describe the reviewing/scoring
+// process AND carry no actual decision or rationale. A first-person decision
+// such as "I will request changes because this patch deletes user data" is
+// substantive content and must be preserved.
+function isPreambleLine(line) {
+  const text = String(line || '').trim();
+  if (!text) return false;
+
+  // A real review decision or its rationale is content, never preamble.
+  if (/\b(?:approve|request\s+changes|block(?:ing)?|reject|merge|because|since|due\s+to)\b/i.test(text)) return false;
+  if (/(?:批准|请求修改|拒绝|合并|因为|由于|原因是|理由是)/.test(text)) return false;
+
+  const enOpener = /^(?:okay|ok|sure|alright|now)[,，]|^(?:i'?m\s+going\s+to|i\s+am\s+going\s+to|i\s+will|i'?ll|i\s+need\s+to|i\s+should|let\s+me|let'?s|first[,\s]+i)\b/i;
+  const enProcess = /\b(?:scor(?:e|ing)|review(?:ing)?|evaluat\w*|assess\w*|analyz\w*|grad(?:e|ing)|rat(?:e|ing)|go\s+through|walk\s+through)\b/i;
+  const enRubric = /\b(?:rubric|criteria|checklist|guidelines)\b/i;
+  if (enOpener.test(text) && (enProcess.test(text) || enRubric.test(text))) return true;
+  if (/^(?:based\s+on|according\s+to)\s+the\s+(?:rubric|criteria|guidelines|checklist)\b/i.test(text) && enProcess.test(text)) return true;
+
+  const zhOpener = /^(?:我将|我会|我要|我来|我先|让我|首先我|好的[，,])/;
+  const zhProcess = /(?:评分|打分|评审|审查|审阅|分析|评估|根据(?:评分)?标准|对照(?:评分)?标准)/;
+  if (zhOpener.test(text) && zhProcess.test(text)) return true;
+
+  return false;
 }
 
 function isFallbackPlaceholderFindingTitle(title) {
