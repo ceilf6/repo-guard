@@ -737,3 +737,28 @@ test('normalizeReviewResponse keeps a real first-line summary that is not preamb
   // A genuine summary that happens to be the first line must still be preserved.
   assert.match(normalized, /### 总结\nThe issue is well scoped and ready to start/);
 });
+
+test('normalizeReviewResponse preserves a first-person review decision as the PR summary', () => {
+  // Regression for Codex review of #27: an opener like "I will" that carries an
+  // actual decision/rationale is substantive content, not preamble to strip.
+  const response = 'I will request changes because this patch deletes persisted user data without a migration.';
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Risky data change',
+  });
+
+  assert.match(normalized, /\*\*决策摘要:\*\*.*deletes persisted user data/);
+  assert.match(normalized, /\*\*处理建议:\*\* 请求修改/);
+});
+
+test('normalizeReviewResponse preserves a first-person decision as the issue summary', () => {
+  const response = "I'll need the reporter to attach logs since the stack trace is missing.";
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: 'Needs logs',
+  });
+
+  assert.match(normalized, /### 总结\n.*attach logs/);
+});
