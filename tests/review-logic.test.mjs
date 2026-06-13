@@ -673,3 +673,67 @@ test('normalizeReviewResponse wraps malformed issue JSON-like output without lea
   assert.doesNotMatch(normalized, /raw issue JSON should not appear/);
   assert.doesNotMatch(normalized, /^\[\{/m);
 });
+
+test('normalizeReviewResponse does not leak model preamble into unstructured issue summary', () => {
+  const response = [
+    "I'm going to score this issue against the rubric.",
+    '',
+    'The issue clearly describes a reproducible crash with a stack trace and version info, and is ready to start.',
+  ].join('\n');
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: 'Crash on startup',
+  });
+
+  assert.match(normalized, /^## Issue 分析: Crash on startup/);
+  // Preamble meta-narration must not be picked up as the summary or the suggestion.
+  assert.doesNotMatch(normalized, /I'm going to score this issue against the rubric/);
+  // The real content line should be promoted into the summary instead.
+  assert.match(normalized, /### 总结\n.*reproducible crash/);
+});
+
+test('normalizeReviewResponse does not leak Chinese model preamble into unstructured issue summary', () => {
+  const response = [
+    '我将根据评分标准对这个 issue 进行评分。',
+    '',
+    '该 issue 清晰描述了可复现的崩溃，包含堆栈与版本信息，可以开始。',
+  ].join('\n');
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: '启动崩溃',
+  });
+
+  assert.doesNotMatch(normalized, /我将根据评分标准对这个 issue 进行评分/);
+  assert.match(normalized, /### 总结\n.*可复现的崩溃/);
+});
+
+test('normalizeReviewResponse does not leak model preamble into unstructured PR summary', () => {
+  const response = [
+    "Let me review this pull request against the checklist.",
+    '',
+    'The change adds a null guard around the cache lookup and is low risk.',
+  ].join('\n');
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'pr',
+    title: 'Add null guard',
+  });
+
+  assert.match(normalized, /^## 代码评审报告: Add null guard/);
+  assert.doesNotMatch(normalized, /Let me review this pull request against the checklist/);
+  assert.match(normalized, /\*\*决策摘要:\*\*.*null guard/);
+});
+
+test('normalizeReviewResponse keeps a real first-line summary that is not preamble', () => {
+  const response = 'The issue is well scoped and ready to start; acceptance criteria are listed.';
+
+  const normalized = normalizeReviewResponse(response, {
+    type: 'issue',
+    title: 'Well scoped issue',
+  });
+
+  // A genuine summary that happens to be the first line must still be preserved.
+  assert.match(normalized, /### 总结\nThe issue is well scoped and ready to start/);
+});

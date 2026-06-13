@@ -654,7 +654,7 @@ function extractSummaryLine(text) {
   const line = String(text || '')
     .split(/\r?\n/)
     .map((item) => item.replace(/^#+\s*/, '').replace(/^[-*]\s*/, '').trim())
-    .find((item) => item && !/^```/.test(item) && !looksLikeStandaloneJson(item) && !isReportTitleLine(item) && !isLooseMetadataLine(item));
+    .find((item) => item && !/^```/.test(item) && !looksLikeStandaloneJson(item) && !isReportTitleLine(item) && !isLooseMetadataLine(item) && !isPreambleLine(item));
   return toSingleLine(line || '模型未按输出契约返回，已归一化为 Repo Guard Markdown 契约。');
 }
 
@@ -712,6 +712,23 @@ function isReportTitleLine(line) {
 
 function isLooseMetadataLine(line) {
   return /^(?:风险等级|处理建议|决策摘要|质量评分|优先级建议|类型|维护者下一步动作|summary|recommendation|risk)\s*[:：]/i.test(String(line || '').trim());
+}
+
+// Model meta-narration about the act of reviewing/scoring (e.g. "I'm going to
+// score this issue against the rubric.") that is not wrapped in <thinking> tags
+// must not be promoted into the summary. Kept conservative so genuine review
+// content is never stripped.
+function isPreambleLine(line) {
+  const text = String(line || '').trim();
+  if (!text) return false;
+  return (
+    /^(?:okay|ok|sure|alright|now)[,，]/i.test(text) ||
+    /^(?:i'?m\s+going\s+to|i\s+am\s+going\s+to|i\s+will|i'?ll|i\s+need\s+to|i\s+should|let\s+me|let'?s|first[,\s]+i)\b/i.test(text) ||
+    /^(?:here'?s|here\s+is)\s+my\b/i.test(text) ||
+    /^(?:based\s+on|according\s+to)\s+the\s+(?:rubric|criteria|guidelines|checklist)\b/i.test(text) ||
+    /^(?:我将|我会|我要|我来|我先|让我|首先我|好的[，,])/.test(text) ||
+    /^根据(?:评分)?标准/.test(text)
+  );
 }
 
 function isFallbackPlaceholderFindingTitle(title) {
