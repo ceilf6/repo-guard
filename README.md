@@ -79,6 +79,37 @@ When `issue_comment` is enabled, Repo Guard runs only when a newly created issue
 
 Repo Guard posts a fresh comment or PR review on every workflow run. It does not deduplicate, update, or delete previous bot comments.
 
+## Advanced: External PR Dispatch
+
+Repo Guard can also run from this repository on a schedule to review public PRs in repositories that have not installed Repo Guard. This is a separate path from the composite action above.
+
+When the scheduled dispatcher sees a public open PR conversation comment authored by `ceilf6` that contains `@ceilf6/repo-guard`, it reviews that PR and posts a normal PR conversation comment from the `ceilf6` account.
+
+Required secret for `ceilf6/repo-guard`:
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `CEILF6_GITHUB_TOKEN` | Yes | GitHub token used to search public PRs and post comments as `ceilf6`. For arbitrary public repositories, use a classic PAT with `public_repo`. |
+
+The dispatcher also uses the normal LLM settings:
+
+| Name | Type | Description |
+|------|------|-------------|
+| `LLM_API_KEY` | Secret | API key for the configured LLM provider |
+| `LLM_PROVIDER` | Variable | `openai` or `anthropic` |
+| `LLM_MODEL` | Variable | Model name |
+| `LLM_BASE_URL` | Variable | Custom relay/proxy URL |
+| `EXTERNAL_REPO_GUARD_MAX_REVIEWS` | Variable | Maximum external PR reviews per run, default `3` |
+| `EXTERNAL_REPO_GUARD_SEARCH_LIMIT` | Variable | Maximum search results scanned per run, default `20` |
+
+Notes:
+
+- Target repositories do not need to add workflows or secrets.
+- Only trigger comments authored by `ceilf6` are processed by default, so other users cannot spend the configured LLM budget by mentioning Repo Guard.
+- Scheduled workflows are not immediate; discovery depends on GitHub Actions schedule timing and GitHub search freshness.
+- The external dispatcher posts a normal comment, not a formal PR review with line comments.
+- External repository code is never checked out or executed.
+
 ## Advanced: Separate PR and Issue Config
 
 Use different models or providers for PR review vs issue review:

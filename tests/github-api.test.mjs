@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as githubApi from '../scripts/github-api.mjs';
 
-const { fetchPRDiff, fetchPRLinkedIssues } = githubApi;
+const { fetchPRDiff, fetchPRLinkedIssues, listIssueComments, searchIssuesAndPullRequests } = githubApi;
 
 const originalFetch = globalThis.fetch;
 
@@ -86,6 +86,73 @@ test('fetchPRDiff throws with status context on API failure', async (t) => {
     () => fetchPRDiff('owner/repo', 9, 'token'),
     /Failed to fetch PR files: 403/,
   );
+});
+
+test('searchIssuesAndPullRequests builds a search request and returns items', async (t) => {
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(JSON.stringify({
+      total_count: 1,
+      items: [{
+        number: 77,
+        repository_url: 'https://api.github.com/repos/owner/repo',
+        pull_request: { url: 'https://api.github.com/repos/owner/repo/pulls/77' },
+      }],
+    }), { status: 200 });
+  };
+
+  const items = await searchIssuesAndPullRequests('"@ceilf6/repo-guard" is:pr is:open', 'token', { perPage: 5 });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].number, 77);
+  const url = new URL(calls[0]);
+  assert.equal(url.pathname, '/search/issues');
+  assert.equal(url.searchParams.get('q'), '"@ceilf6/repo-guard" is:pr is:open');
+  assert.equal(url.searchParams.get('per_page'), '5');
+});
+
+test('listIssueComments paginates PR conversation comments', async (t) => {
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    const page = new URL(String(url)).searchParams.get('page');
+    const comments = page === '1'
+      ? Array.from({ length: 100 }, (_, index) => ({
+          id: index + 1,
+          body: `comment ${index + 1}`,
+          html_url: `https://github.com/owner/repo/pull/7#issuecomment-${index + 1}`,
+          created_at: '2026-07-01T00:00:00Z',
+          updated_at: '2026-07-01T00:00:00Z',
+          user: { login: 'ceilf6' },
+        }))
+      : [{
+          id: 101,
+          body: '@ceilf6/repo-guard review',
+          html_url: 'https://github.com/owner/repo/pull/7#issuecomment-101',
+          created_at: '2026-07-01T00:01:00Z',
+          updated_at: '2026-07-01T00:01:00Z',
+          user: { login: 'ceilf6' },
+        }];
+
+    return new Response(JSON.stringify(comments), { status: 200 });
+  };
+
+  const comments = await listIssueComments('owner/repo', 7, 'token');
+
+  assert.equal(comments.length, 101);
+  assert.equal(comments[100].id, 101);
+  assert.equal(comments[100].user.login, 'ceilf6');
+  assert.match(calls[0], /page=1/);
+  assert.match(calls[1], /page=2/);
 });
 
 test('fetchPRLinkedIssues includes GraphQL closing issues and PR body refs', async (t) => {

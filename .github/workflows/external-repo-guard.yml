@@ -1,0 +1,48 @@
+name: External Repo Guard
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Log matching triggers without calling the LLM or posting comments"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: external-repo-guard
+  cancel-in-progress: false
+
+jobs:
+  external-guard:
+    runs-on: [self-hosted, macOS, repo-guard-intranet]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Initialize skills
+        shell: bash
+        run: |
+          if [ ! -d skills/code-reviewer ]; then
+            rm -rf skills
+            git clone --depth 1 https://github.com/ceilf6/ceilf6-skills.git skills
+          fi
+      - name: Run external dispatcher
+        shell: bash
+        env:
+          CEILF6_GITHUB_TOKEN: ${{ secrets.CEILF6_GITHUB_TOKEN }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'anthropic' }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'claude-opus-4-7-thinking' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_MAX_TOKENS: ${{ vars.LLM_MAX_TOKENS || '4096' }}
+          EXTERNAL_REPO_GUARD_TRIGGER_ACTOR: ceilf6
+          EXTERNAL_REPO_GUARD_MAX_REVIEWS: ${{ vars.EXTERNAL_REPO_GUARD_MAX_REVIEWS || '3' }}
+          EXTERNAL_REPO_GUARD_SEARCH_LIMIT: ${{ vars.EXTERNAL_REPO_GUARD_SEARCH_LIMIT || '20' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: node scripts/external-dispatcher.mjs

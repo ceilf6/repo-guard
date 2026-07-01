@@ -1,15 +1,13 @@
 // @ts-check
 import { chatCompletion } from './llm-client.mjs';
-import { fetchPRInfo, fetchPRDiff, fetchIssue, fetchPRLinkedIssues, postComment, postPRReview } from './github-api.mjs';
-import { loadSystemPrompt, buildPRUserMessage, buildIssueUserMessage } from './prompts.mjs';
+import { fetchIssue, postComment, postPRReview } from './github-api.mjs';
+import { loadSystemPrompt, buildIssueUserMessage } from './prompts.mjs';
+import { buildPRReview } from './pr-reviewer.mjs';
 import {
-  extractInlineComments,
-  extractRecommendation,
   extractUserPrompt,
   getReviewNumber,
   isRepoGuardPublishedComment,
   isTriggeredByComment,
-  mapRecommendationToEvent,
   normalizeReviewResponse,
   resolveReviewType,
   stripThinkingBlocks,
@@ -80,48 +78,30 @@ async function main() {
 async function reviewPR(prNumber) {
   console.log(`获取 PR #${prNumber}...`);
 
-  const [prInfo, files] = await Promise.all([
-    fetchPRInfo(config.repo, prNumber, config.githubToken),
-    fetchPRDiff(config.repo, prNumber, config.githubToken),
-  ]);
-  const linkedIssueContext = await fetchPRLinkedIssues(config.repo, prNumber, prInfo, config.githubToken);
-
   const userPrompt = extractUserPrompt(config.commentBody);
-  const extra = [config.extraInstructions, userPrompt].filter(Boolean).join('\n');
-  const systemPrompt = loadSystemPrompt('pr', extra);
-  const userMessage = buildPRUserMessage(prInfo, files, linkedIssueContext);
-
-  const messages = [{ role: 'user', content: userMessage }];
-  if (userPrompt) {
-    messages.push({ role: 'user', content: `用户请求: ${userPrompt}` });
-  }
-
-  console.log(`调用 LLM（${files.length} 个文件，${prInfo.additions + prInfo.deletions} 行变更，${linkedIssueContext.issues.length} 个关联 Issue）...`);
-
-  const rawResponse = await chatCompletion({
+  const review = await buildPRReview({
+    repo: config.repo,
+    prNumber,
+    githubToken: config.githubToken,
     provider: config.provider,
     model: config.model,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     maxTokens: config.maxTokens,
-    system: systemPrompt,
-    messages,
+    extraInstructions: config.extraInstructions,
+    userPrompt,
   });
-  const response = normalizeReviewResponse(stripThinkingBlocks(rawResponse), { type: 'pr', title: prInfo.title });
 
-  const recommendation = extractRecommendation(response);
-  const event = mapRecommendationToEvent(recommendation);
-  const inlineComments = extractInlineComments(response, files);
-
-  console.log(`处理建议: ${recommendation} → GitHub 评审事件: ${event}`);
-  console.log(`行级评论数: ${inlineComments.length}`);
+  console.log(`评审上下文: ${review.files.length} 个文件，${review.prInfo.additions + review.prInfo.deletions} 行变更，${review.linkedIssueContext.issues.length} 个关联 Issue`);
+  console.log(`处理建议: ${review.recommendation} → GitHub 评审事件: ${review.event}`);
+  console.log(`行级评论数: ${review.inlineComments.length}`);
 
   try {
-    await postPRReview(config.repo, prNumber, response, event, inlineComments, config.githubToken);
+    await postPRReview(config.repo, prNumber, review.response, review.event, review.inlineComments, config.githubToken);
   } catch (err) {
     // If inline review posting fails, keep the review body by falling back to a plain comment.
     console.warn(`PR 评审发布失败（${err.message}），降级为普通评论...`);
-    await postComment(config.repo, prNumber, response, config.githubToken);
+    await postComment(config.repo, prNumber, review.response, config.githubToken);
   }
 }
 

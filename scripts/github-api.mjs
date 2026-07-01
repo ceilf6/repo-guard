@@ -44,6 +44,21 @@ export async function fetchAllPages(url, token, description) {
   return items;
 }
 
+export async function searchIssuesAndPullRequests(query, token, options = {}) {
+  const perPage = Math.min(Math.max(Number(options.perPage || PAGE_SIZE), 1), PAGE_SIZE);
+  const url = new URL(`${GITHUB_API}/search/issues`);
+  url.searchParams.set('q', query);
+  url.searchParams.set('per_page', String(perPage));
+
+  const res = await fetch(String(url), {
+    headers: headers(token),
+  });
+  if (!res.ok) throw new Error(`Failed to search issues and pull requests: ${res.status}`);
+
+  const data = await res.json();
+  return data.items || [];
+}
+
 export async function fetchPRInfo(repo, prNumber, token) {
   const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}`, {
     headers: headers(token),
@@ -92,6 +107,25 @@ export async function fetchIssue(repo, issueNumber, token) {
     url: data.html_url,
     pull_request: data.pull_request,
   };
+}
+
+export async function listIssueComments(repo, issueNumber, token) {
+  const comments = await fetchAllPages(
+    `${GITHUB_API}/repos/${repo}/issues/${issueNumber}/comments`,
+    token,
+    'issue comments',
+  );
+
+  return comments.map((comment) => ({
+    id: comment.id,
+    body: comment.body || '',
+    html_url: comment.html_url || '',
+    created_at: comment.created_at || '',
+    updated_at: comment.updated_at || '',
+    user: {
+      login: comment.user?.login || '',
+    },
+  }));
 }
 
 export async function fetchPRLinkedIssues(repo, prNumber, prInfo, token) {
