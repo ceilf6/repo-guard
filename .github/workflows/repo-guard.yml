@@ -34,7 +34,7 @@ jobs:
           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
         )
       )
-    runs-on: [self-hosted, macOS, repo-guard-intranet]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
