@@ -2,7 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as githubApi from '../scripts/github-api.mjs';
 
-const { fetchPRDiff, fetchPRLinkedIssues, listIssueComments, searchIssuesAndPullRequests } = githubApi;
+const {
+  fetchPRDiff,
+  fetchPRLinkedIssues,
+  listIssueComments,
+  parseUnifiedDiffPatches,
+  searchIssuesAndPullRequests,
+} = githubApi;
 
 const originalFetch = globalThis.fetch;
 
@@ -73,6 +79,92 @@ test('fetchPRDiff concatenates multiple pages', async (t) => {
   assert.equal(files[100].filename, 'file-100.js');
   assert.match(calls[0], /page=1/);
   assert.match(calls[1], /page=2/);
+});
+
+test('fetchPRDiff backfills patches omitted by GitHub for large files', async (t) => {
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const rawDiff = [
+    'diff --git a/big.js b/big.js',
+    'index 111..222 100644',
+    '--- a/big.js',
+    '+++ b/big.js',
+    '@@ -1,3 +1,3 @@',
+    ' unchanged',
+    '-old line',
+    '+new line',
+    ' trailing',
+  ].join('\n');
+
+  const requests = [];
+  globalThis.fetch = async (url, options = {}) => {
+    requests.push({ url: String(url), accept: options.headers?.Accept });
+    if (String(url).includes('/files')) {
+      return new Response(JSON.stringify([
+        // GitHub omits `patch` for oversized single-file diffs.
+        { filename: 'big.js', status: 'modified', additions: 1, deletions: 1 },
+      ]), { status: 200 });
+    }
+    return new Response(rawDiff, { status: 200 });
+  };
+
+  const files = await fetchPRDiff('owner/repo', 25, 'token');
+
+  assert.equal(files.length, 1);
+  assert.match(files[0].patch, /@@ -1,3 \+1,3 @@/);
+  assert.match(files[0].patch, /\+new line/);
+  const rawRequest = requests.find((req) => req.accept === 'application/vnd.github.diff');
+  assert.ok(rawRequest, 'expected a raw diff request with the diff media type');
+  assert.match(rawRequest.url, /\/pulls\/25$/);
+});
+
+test('fetchPRDiff does not fetch the raw diff when all patches are present', async (t) => {
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    return new Response(JSON.stringify([
+      { filename: 'a.js', status: 'modified', additions: 1, deletions: 0, patch: '@@ -1 +1,2 @@\n a\n+b' },
+    ]), { status: 200 });
+  };
+
+  const files = await fetchPRDiff('owner/repo', 5, 'token');
+
+  assert.equal(files[0].patch, '@@ -1 +1,2 @@\n a\n+b');
+  assert.equal(requests.filter((url) => !url.includes('/files')).length, 0);
+});
+
+test('parseUnifiedDiffPatches keys per-file hunks by the new path', () => {
+  const diff = [
+    'diff --git a/src/added.js b/src/added.js',
+    'new file mode 100644',
+    'index 000..333',
+    '--- /dev/null',
+    '+++ b/src/added.js',
+    '@@ -0,0 +1,2 @@',
+    '+export const a = 1;',
+    '+export const b = 2;',
+    'diff --git a/src/gone.js b/src/gone.js',
+    'deleted file mode 100644',
+    'index 444..000',
+    '--- a/src/gone.js',
+    '+++ /dev/null',
+    '@@ -1,1 +0,0 @@',
+    '-export const gone = true;',
+  ].join('\n');
+
+  const patches = parseUnifiedDiffPatches(diff);
+
+  assert.deepEqual([...patches.keys()], ['src/added.js', 'src/gone.js']);
+  assert.match(patches.get('src/added.js'), /^@@ -0,0 \+1,2 @@/);
+  assert.match(patches.get('src/added.js'), /\+export const b = 2;/);
+  assert.match(patches.get('src/gone.js'), /-export const gone = true;/);
+  assert.doesNotMatch(patches.get('src/added.js'), /diff --git|\+\+\+/);
 });
 
 test('fetchPRDiff throws with status context on API failure', async (t) => {

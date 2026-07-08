@@ -81,14 +81,105 @@ export async function fetchPRInfo(repo, prNumber, token) {
 }
 
 export async function fetchPRDiff(repo, prNumber, token) {
-  const files = await fetchAllPages(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}/files`, token, 'PR files');
-  return files.map((f) => ({
+  const rawFiles = await fetchAllPages(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}/files`, token, 'PR files');
+  const files = rawFiles.map((f) => ({
     filename: f.filename,
     status: f.status,
     additions: f.additions,
     deletions: f.deletions,
     patch: f.patch || '',
   }));
+
+  // GitHub omits the per-file `patch` for large diffs (e.g. a single file with
+  // thousands of changed lines). Without the patch the reviewer sees a changed
+  // file with no content and reports "diff 内容为空". Fall back to the full
+  // unified diff and backfill the missing patches.
+  const needsBackfill = files.some((f) => !f.patch && f.additions + f.deletions > 0);
+  if (needsBackfill) {
+    const rawDiff = await fetchPRRawDiff(repo, prNumber, token);
+    if (rawDiff) {
+      const patches = parseUnifiedDiffPatches(rawDiff);
+      for (const file of files) {
+        if (!file.patch && patches.has(file.filename)) {
+          file.patch = patches.get(file.filename);
+        }
+      }
+    }
+  }
+
+  return files;
+}
+
+export async function fetchPRRawDiff(repo, prNumber, token) {
+  const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}`, {
+    headers: { ...headers(token), Accept: 'application/vnd.github.diff' },
+  });
+  if (!res.ok) {
+    // 406 means GitHub refused the diff (too large); degrade instead of failing
+    // the whole review so metadata-only output is still posted.
+    console.warn(`Failed to fetch raw PR diff: ${res.status}`);
+    return null;
+  }
+  return res.text();
+}
+
+// Splits a unified diff (`Accept: application/vnd.github.diff`) into per-file
+// patches keyed by the new file path, matching the shape of the files API
+// `patch` field (hunks starting at the first `@@`, without the git header).
+export function parseUnifiedDiffPatches(diffText) {
+  const patches = new Map();
+  if (!diffText) return patches;
+
+  let path = null;
+  let hunkLines = null;
+  let collecting = false;
+
+  const flush = () => {
+    if (path && collecting && hunkLines && hunkLines.length) {
+      patches.set(path, hunkLines.join('\n'));
+    }
+  };
+
+  for (const line of diffText.split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      flush();
+      path = pathFromDiffGitHeader(line);
+      hunkLines = [];
+      collecting = false;
+      continue;
+    }
+    if (hunkLines === null) continue; // preamble before the first file section
+
+    if (!collecting) {
+      // `+++ b/<path>` is the authoritative new path; `--- ` is ignored so a
+      // deletion's `+++ /dev/null` does not clobber the header-derived path.
+      if (line.startsWith('+++ ')) {
+        const newPath = stripDiffPathPrefix(line.slice(4));
+        if (newPath) path = newPath;
+        continue;
+      }
+      if (!line.startsWith('@@')) continue;
+      collecting = true;
+    }
+    hunkLines.push(line);
+  }
+  flush();
+
+  return patches;
+}
+
+function pathFromDiffGitHeader(line) {
+  const match = line.match(/ b\/(.+)$/);
+  if (!match) return null;
+  return stripDiffPathPrefix(`b/${match[1]}`);
+}
+
+function stripDiffPathPrefix(raw) {
+  let value = raw.trim();
+  if (!value || value === '/dev/null') return null;
+  if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+  if (value.startsWith('a/') || value.startsWith('b/')) value = value.slice(2);
+  return value || null;
 }
 
 export async function fetchIssue(repo, issueNumber, token) {

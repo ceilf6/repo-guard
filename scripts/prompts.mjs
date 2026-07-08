@@ -58,6 +58,10 @@ export function loadSystemPrompt(type, extraInstructions) {
 }
 
 const MAX_DIFF_SIZE = 100 * 1024;
+// A single file whose diff exceeds the budget should still be reviewed with a
+// truncated patch rather than dropped entirely, so long as this much of it fits.
+const MIN_PARTIAL_PATCH_CHARS = 2 * 1024;
+const PATCH_TRUNCATION_NOTICE = '\n… (diff 已按大小截断，仅展示前一部分)';
 
 export function getChangedNewLines(file) {
   const changedLines = new Set();
@@ -170,18 +174,44 @@ export function buildPRUserMessage(prInfo, files, linkedIssueContext) {
 
   let includedCount = 0;
   let omittedCount = 0;
+  const omittedOversized = [];
+
+  const fileEntryHeader = (file) =>
+    `\n### ${file.filename} (${formatFileStatus(file.status)}, +${file.additions} -${file.deletions})\n\`\`\`diff\n`;
+  const fileEntryFooter = '\n```\n';
 
   for (const file of sorted) {
-    const entry = `\n### ${file.filename} (${formatFileStatus(file.status)}, +${file.additions} -${file.deletions})\n\`\`\`diff\n${file.patch}\n\`\`\`\n`;
+    const entry = `${fileEntryHeader(file)}${file.patch}${fileEntryFooter}`;
     if (totalSize + entry.length > MAX_DIFF_SIZE) {
       truncated = true;
       omittedCount++;
+      omittedOversized.push(file);
       continue;
     }
     diffText += entry;
     totalSize += entry.length;
     includedFiles.push(file);
     includedCount++;
+  }
+
+  // If no file fit in full, a single oversized file (e.g. one file with
+  // thousands of changed lines) would otherwise leave the reviewer with an
+  // empty diff and a "diff 内容为空" review. Include a truncated slice of the
+  // largest omitted file so there is always real diff content to review.
+  if (includedCount === 0 && omittedOversized.length > 0) {
+    const file = omittedOversized[0];
+    const header = fileEntryHeader(file);
+    const budget = MAX_DIFF_SIZE - header.length - fileEntryFooter.length - PATCH_TRUNCATION_NOTICE.length;
+    if (file.patch && budget >= MIN_PARTIAL_PATCH_CHARS) {
+      let partial = file.patch.slice(0, budget);
+      const lastNewline = partial.lastIndexOf('\n');
+      if (lastNewline > 0) partial = partial.slice(0, lastNewline);
+      const partialFile = { ...file, patch: partial };
+      diffText += `${header}${partial}${PATCH_TRUNCATION_NOTICE}${fileEntryFooter}`;
+      includedFiles.push(partialFile);
+      includedCount++;
+      omittedCount--;
+    }
   }
 
   let message = `# PR: ${prInfo.title}\n\n`;
@@ -202,7 +232,10 @@ export function buildPRUserMessage(prInfo, files, linkedIssueContext) {
   message += `## 完整 PR 差异\n以下 diff 来自 PR 当前全部变更，而不是本次推送的增量提交。\n${diffText}`;
 
   if (truncated) {
-    message += `\n\n> ⚠️ 差异已截断（超过 ${MAX_DIFF_SIZE / 1024}KB）。已省略 ${omittedCount} 个文件。评审聚焦于可纳入上下文的最大变更。`;
+    const detail = omittedCount > 0
+      ? `已省略 ${omittedCount} 个文件的差异。`
+      : '部分文件的差异仅展示前一部分。';
+    message += `\n\n> ⚠️ 差异已截断（超过 ${MAX_DIFF_SIZE / 1024}KB）。${detail}评审聚焦于可纳入上下文的最大变更。`;
   }
 
   return message;

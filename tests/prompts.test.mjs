@@ -47,6 +47,31 @@ test('buildPRUserMessage keeps smaller actionable diffs after omitting an oversi
   assert.doesNotMatch(message, /Changed Files|Inline Comment Line Targets|Diff truncated|\\d+ files/);
 });
 
+test('buildPRUserMessage includes a truncated slice when the only file is oversized', () => {
+  const patch = `@@ -1,4 +1,4 @@\n${Array.from({ length: 8000 }, (_, i) => `-old ${i}\n+new ${i}`).join('\n')}`;
+  const message = buildPRUserMessage(prInfo({
+    title: '重写单文件',
+    additions: 8000,
+    deletions: 8000,
+    changedFiles: 1,
+  }), [
+    {
+      filename: 'courseGrabber.js',
+      status: 'modified',
+      additions: 8000,
+      deletions: 8000,
+      patch,
+    },
+  ]);
+
+  // The reviewer must still receive real diff content, not an empty diff block.
+  assert.match(message, /### courseGrabber\.js \(修改, \+8000 -8000\)/);
+  assert.match(message, /\+new 0/);
+  assert.match(message, /diff 已按大小截断/);
+  assert.match(message, /部分文件的差异仅展示前一部分/);
+  assert.doesNotMatch(message, /已省略 \d+ 个文件/);
+});
+
 test('buildPRUserMessage includes linked issue context and degraded warnings', () => {
   const message = buildPRUserMessage(prInfo({
     title: 'Add dry-run mode',
