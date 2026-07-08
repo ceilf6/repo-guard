@@ -1,0 +1,23 @@
+scripts/github-api.mjs
+  s_96abf4bc3d9fd0::t_c231a26496da42 84-85,92-182
+scripts/prompts.mjs
+  s_96abf4bc3d9fd0::t_79e24b4faa68ed 61-64,177-181,184,188,197-216,235-238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "229d8506f9afa85e1bf7ac14c1ea455918072556",
+  "prompts": {},
+  "sessions": {
+    "s_96abf4bc3d9fd0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "38e0ff8f-91b3-4b70-bc44-651634f18832",
+        "model": "unknown"
+      },
+      "human_author": "ceilf6 <wangjinghong.ceilf6>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
