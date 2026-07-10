@@ -1,6 +1,32 @@
 # Repo Guard
 
-AI-powered review bot for GitHub Issues and Pull Requests.
+**智能体开发闭环 issue → PR → CR 中的评审环节**，以 GitHub Action 形态交付，已上架 GitHub Marketplace。
+
+AI-powered review bot for GitHub Issues and Pull Requests, built as the CR stage of an agent-driven development loop.
+
+## 为什么造这个轮子
+
+社区不缺 AI review bot，但它们大多面向**人类协作**：评审意见写给人看，流程的终点是 approve 按钮。而在智能体驱动的开发方式里，评审是**循环的一环**——智能体按 issue 开发、提 PR，CR 给出结论与行级意见，智能体消费这些反馈进入下一轮修复，直到质量门放行：
+
+```
+issue → dev → PR → CR ──批准──→ merge
+         ↑            │
+         └─── fix ←───┘ 请求修改
+```
+
+repo-guard 是为这个闭环造的 CR 环节：输出稳定的结论契约与可定位的行级意见——既给人看，也让下一轮智能体能稳定消费。
+
+> repo-guard 是我 Harness 工程实践中的 CR 环节；要在一个新仓库里快速冷启动整套 Harness 环境，见 [harness-kit](https://github.com/ceilf6/harness-kit)。
+
+## 设计决策
+
+1. **知识层 / 执行层分离** — 评审标准（system prompt、评审框架、评分规则）沉淀在独立的 [ceilf6-skills](https://github.com/ceilf6/ceilf6-skills) 仓库，本仓库只做运行时：事件监听、数据获取、LLM 调用、评论发布。迭代评审标准不需要动一行运行时代码。
+2. **输出即契约** — 评审结论是固定的中文枚举（`批准` / `评论` / `请求修改` / `需要人工判断`）加结构化行级意见；解析器与下游智能体都依赖这份契约，评测中对契约稳定性做断言。
+3. **评审质量本身也过质量门** — `npm run eval:quality` 用真模型跑 4 个固定评审场景，断言输出契约、行级定位与可操作性。给评审 bot 装上它给别的仓库装的东西。
+
+---
+
+## Features
 
 - PR: Automated code review with cascade analysis, Karpathy review standard, inline comments
 - Issue: Quality assessment with completeness, clarity, actionability scoring
@@ -146,9 +172,15 @@ jobs:
 
 ### Architecture
 
-Review prompts are sourced from [ceilf6/ceilf6-skills](https://github.com/ceilf6/ceilf6-skills) via git submodule:
-- PR review uses the `code-reviewer` skill (cascade analysis + Karpathy review standard)
-- Issue review uses the `issue-reviewer` skill (completeness, clarity, actionability scoring)
+本仓库是**执行层**，[ceilf6/ceilf6-skills](https://github.com/ceilf6/ceilf6-skills) 是**知识层**，通过 git submodule 引用、运行时始终拉取最新版 skill。更新评审标准只需修改 ceilf6-skills 中的 skill 文件，无需改动本仓库代码。
+
+| 仓库 | 职责 |
+|------|------|
+| `ceilf6/repo-guard` | GitHub Action 运行时：事件监听、数据获取、LLM 调用、评论发布 |
+| `ceilf6/ceilf6-skills` | 评审知识：system prompt、评审标准、分析框架、评分规则 |
+
+- PR review uses the [`code-reviewer`](https://github.com/ceilf6/ceilf6-skills/tree/main/code-reviewer) skill (cascade analysis + Karpathy review standard)
+- Issue review uses the [`issue-reviewer`](https://github.com/ceilf6/ceilf6-skills/tree/main/issue-reviewer) skill (completeness, clarity, actionability scoring)
 
 At runtime, the action clones the skills repo and assembles the system prompt from `SKILL.md` + all `references/*.md` files.
 
@@ -166,6 +198,10 @@ At runtime, the action clones the skills repo and assembles the system prompt fr
 2. Fetches issue title, body, and labels
 3. Assembles system prompt from `issue-reviewer` skill
 4. Sends to LLM, posts structured quality assessment as a comment
+
+## Quality Evaluation
+
+The review bot itself is behind a quality gate: `npm run eval:quality` runs a real-model evaluation harness over four fixed scenarios (auth-bypass PR, huge-diff-plus-small-change PR, vague crash issue, ready feature issue), asserting Chinese output contract stability, parser compatibility, inline comment extraction, and changed-line targeting. See [docs/quality-evaluation.md](docs/quality-evaluation.md).
 
 ## Relay/Proxy Support
 
@@ -203,21 +239,6 @@ jobs:
 For public repositories, restrict self-hosted runner workflows to trusted
 events and actors. Do not let untrusted fork pull requests execute arbitrary
 code on a persistent local runner.
-
-## Relationship with ceilf6-skills
-
-本仓库是 **执行层**，[ceilf6/ceilf6-skills](https://github.com/ceilf6/ceilf6-skills) 是 **知识层**。
-
-| 仓库 | 职责 |
-|------|------|
-| `ceilf6/repo-guard` | GitHub Action 运行时：事件监听、数据获取、LLM 调用、评论发布 |
-| `ceilf6/ceilf6-skills` | 评审知识：system prompt、评审标准、分析框架、评分规则 |
-
-repo-guard 通过 git submodule 引用 ceilf6-skills，运行时始终拉取最新版 skill。更新评审逻辑只需修改 ceilf6-skills 中的 skill 文件，无需改动 repo-guard 代码。
-
-使用的 skill：
-- [`code-reviewer`](https://github.com/ceilf6/ceilf6-skills/tree/main/code-reviewer) — PR 代码评审（级联分析 + Karpathy 审查标准）
-- [`issue-reviewer`](https://github.com/ceilf6/ceilf6-skills/tree/main/issue-reviewer) — Issue 质量评估（完整性、清晰度、可操作性）
 
 ## Friendly Links
 
