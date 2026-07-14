@@ -1,0 +1,27 @@
+README.md
+  s_29700ba6a47311::t_6f5f72cf02c7f1 84,96,130,220,231
+docs/quality-evaluation.md
+  s_29700ba6a47311::t_3e8132d7bec8ef 36
+docs/superpowers/plans/2026-07-14-openrouter-structured-outputs.md
+  s_29700ba6a47311::t_82bb67de9d72bc 5,13,49-50,85-87,922,934,940,980,984,1010
+docs/superpowers/specs/2026-07-14-openrouter-structured-outputs-design.md
+  s_29700ba6a47311::t_07a0dd7b259e73 26-27,69-70,81,281,336,344,350
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0420e03078c48bd3ac6dbe81c67b2c9298aca287",
+  "prompts": {},
+  "sessions": {
+    "s_29700ba6a47311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5eb6-3e4d-7062-9f1a-02e08ad74c4d",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
