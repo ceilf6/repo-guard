@@ -1,0 +1,23 @@
+scripts/openrouter-structured-output.mjs
+  s_29700ba6a47311::t_d69367f81d7987 1-53
+tests/openrouter-structured-output.test.mjs
+  s_29700ba6a47311::t_6c5f50740cbade 1-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2f96a6e0266d0a224b4915cdc8827ec2008205e7",
+  "prompts": {},
+  "sessions": {
+    "s_29700ba6a47311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5eb6-3e4d-7062-9f1a-02e08ad74c4d",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
