@@ -100,7 +100,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
     if (parsed && isCanonicalPRReview(parsed)) return renderCanonicalPRReview(parsed, context.title);
     if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title);
     if (parsed) return formatUnknownJsonPRReview(parsed, context.title);
-    if (jsonLike) return formatInvalidJsonPRReview(context.title);
+    if (jsonLike) return formatRawPRReview(trimmed, context.title);
     return formatUnstructuredPRReview(trimmed, context.title);
   }
 
@@ -110,7 +110,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
     if (parsed && isCanonicalIssueReview(parsed)) return renderCanonicalIssueReview(parsed, context.title);
     if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title);
     if (parsed) return formatUnknownJsonIssueReview(parsed, context.title);
-    if (jsonLike) return formatInvalidJsonIssueReview(context.title);
+    if (jsonLike) return formatRawIssueReview(trimmed, context.title);
     return formatUnstructuredIssueReview(trimmed, context.title);
   }
 
@@ -119,23 +119,83 @@ export function normalizeReviewResponse(response = '', context = {}) {
 
 function parseStandaloneJson(response) {
   const json = unwrapJsonFence(response);
-  if (!looksLikeCompleteJsonValue(json)) return null;
+  if (!looksLikeStandaloneJson(json)) return null;
 
   try {
     return JSON.parse(json);
   } catch {
-    return null;
+    const repaired = repairTruncatedJson(json);
+    if (!repaired) return null;
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      return null;
+    }
   }
+}
+
+function repairTruncatedJson(json) {
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  let rootClosed = false;
+
+  for (const character of json) {
+    if (rootClosed) {
+      if (!/\s/.test(character)) return null;
+      continue;
+    }
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (character === '"') {
+        inString = false;
+        continue;
+      }
+      if (character.charCodeAt(0) < 0x20) return null;
+      continue;
+    }
+
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+    if (character === '{' || character === '[') {
+      stack.push(character);
+      continue;
+    }
+    if (character === '}' || character === ']') {
+      const expected = character === '}' ? '{' : '[';
+      if (stack.pop() !== expected) return null;
+      if (stack.length === 0) rootClosed = true;
+    }
+  }
+
+  if (rootClosed || stack.length === 0) return null;
+
+  let repaired = json;
+  if (escaped) repaired = repaired.slice(0, -1);
+  if (inString) repaired += '"';
+  repaired = repaired.trimEnd();
+  if (repaired.endsWith(':')) repaired += 'null';
+  if (repaired.endsWith(',')) repaired = repaired.slice(0, -1);
+  repaired += [...stack]
+    .reverse()
+    .map((open) => open === '{' ? '}' : ']')
+    .join('');
+  return repaired;
 }
 
 function looksLikeStandaloneJson(response) {
   const json = unwrapJsonFence(response);
   return json.startsWith('{') || json.startsWith('[');
-}
-
-function looksLikeCompleteJsonValue(response) {
-  const json = String(response || '').trim();
-  return (json.startsWith('{') && json.endsWith('}')) || (json.startsWith('[') && json.endsWith(']'));
 }
 
 function unwrapJsonFence(response) {
@@ -379,37 +439,15 @@ function formatUnknownJsonPRReview(review, title = 'PR Review') {
   ].join('\n');
 }
 
-function formatInvalidJsonPRReview(title = 'PR Review') {
+function formatRawPRReview(response, title = 'PR Review') {
   return [
-    `## 代码评审报告: ${title || 'PR Review'}`,
+    `## 模型原始代码评审输出: ${title || 'PR Review'}`,
     '',
-    '**风险等级:** 中',
-    '**处理建议:** 需要人工判断',
-    '**决策摘要:** 模型返回了不可解析的 JSON-like 输出，已安全归一化为 Repo Guard Markdown 契约。',
+    '**处理建议:** 评论',
     '',
-    '### 级联分析',
-    '- 变更符号: 未在模型 JSON-like 输出中提供',
-    '- 受影响流程: GitHub 评论展示与后续解析',
-    '- 变更集外调用方: unknown',
-    '- 置信度: degraded',
+    '模型返回了非空内容，但该内容无法按结构化契约解析。以下保留模型实际返回的信息；本次不因格式问题追加模型调用。',
     '',
-    '### 问题发现',
-    '1. **[中] 模型输出是不可解析 JSON-like 内容**',
-    '   - 证据: 发布前检测到 JSON-like 输出，但无法安全解析。',
-    '   - 受影响调用方/流程: GitHub 评论展示与后续解析',
-    '   - 最小可行修复: 已使用契约外壳包裹，避免整条评论退化为不可解析输出；建议优化提示让模型直接遵循契约。',
-    '',
-    '### 行级发现',
-    '- 无明确变更行归属。',
-    '',
-    '### Karpathy 评审',
-    '- 假设: 模型返回了不可解析 JSON-like 输出，发布前已做安全归一化。',
-    '- 简洁性: 使用契约外壳包裹，避免整条评论格式污染后续解析；不可解析原文不再附在评论中。',
-    '- 变更范围: 未在模型 JSON-like 输出中提供',
-    '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
-    '',
-    '### 缺失覆盖',
-    '- 输出未命中 Repo Guard Markdown 契约；建议补充真实模型质量评估覆盖。',
+    `<pre>${escapeHtml(response)}</pre>`,
   ].join('\n');
 }
 
@@ -500,39 +538,25 @@ function formatUnknownJsonIssueReview(review, title = 'Issue Review') {
   ].join('\n');
 }
 
-function formatInvalidJsonIssueReview(title = 'Issue Review') {
+function formatRawIssueReview(response, title = 'Issue Review') {
   return [
-    `## Issue 分析: ${title || 'Issue Review'}`,
+    `## 模型原始 Issue 分析输出: ${title || 'Issue Review'}`,
     '',
-    '**质量评分:** 2/5',
-    '**优先级建议:** P2-中',
-    '**类型:** 讨论',
     '**维护者下一步动作:** 需要分诊决策',
     '',
-    '### 完整性',
-    '- 问题陈述: 未在模型 JSON-like 输出中提供',
-    '- 复现步骤: 未在模型 JSON-like 输出中提供',
-    '- 预期与实际: 未在模型 JSON-like 输出中提供',
-    '- 环境信息: 未在模型 JSON-like 输出中提供',
-    '- 支撑证据: 未在模型 JSON-like 输出中提供',
+    '模型返回了非空内容，但该内容无法按结构化契约解析。以下保留模型实际返回的信息；本次不因格式问题追加模型调用。',
     '',
-    '### 清晰度',
-    '- 标题质量: 未在模型 JSON-like 输出中提供',
-    '- 单一关注点: 未在模型 JSON-like 输出中提供',
-    '- 表达精确度: 未在模型 JSON-like 输出中提供',
-    '- 范围: 未在模型 JSON-like 输出中提供',
-    '',
-    '### 可执行性',
-    '- 是否可开始: 需要维护者分诊',
-    '- 验收标准: 未在模型 JSON-like 输出中提供',
-    '- 依赖: 未在模型 JSON-like 输出中提供',
-    '',
-    '### 建议',
-    '- 模型返回了不可解析的 JSON-like 输出，已安全归一化为 Repo Guard Markdown 契约；需要人工查看原始模型配置或优化提示。',
-    '',
-    '### 总结',
-    '模型返回了不可解析的 JSON-like 输出，已安全归一化为 Repo Guard Markdown 契约。',
+    `<pre>${escapeHtml(response)}</pre>`,
   ].join('\n');
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function formatUnstructuredIssueReview(response, title = 'Issue Review') {
