@@ -110,7 +110,7 @@ export async function chatCompletion({
   maxTokens,
   messages,
   system,
-  structuredOutputMode = 'off',
+  structuredOutputMode = 'auto',
   responseFormat,
 }) {
   const base = normalizeBaseURL(provider, baseURL);

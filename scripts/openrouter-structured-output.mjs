@@ -3,7 +3,7 @@
 const capabilityCache = new Map();
 
 export function parseStructuredOutputMode(value = '') {
-  const mode = String(value || 'off').trim().toLowerCase();
+  const mode = String(value || 'auto').trim().toLowerCase();
   if (mode === 'off' || mode === 'auto') return mode;
   throw new Error('LLM_STRUCTURED_OUTPUT must be "off" or "auto"');
 }

@@ -31,7 +31,7 @@ inputs:
   structured-output:
     description: "OpenRouter structured output mode: 'off' or 'auto'"
     required: false
-    default: "off"
+    default: "auto"
   github-token:
     description: "GitHub token for posting comments"
     required: false

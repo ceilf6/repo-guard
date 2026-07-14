@@ -106,6 +106,26 @@ test('supported OpenRouter model sends strict response format and routing requir
   assert.match(calls[1].body.messages[0].content, /本次响应必须遵守请求携带的 JSON Schema/);
 });
 
+test('omitted mode defaults to OpenRouter capability detection', async () => {
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    calls.push(String(url));
+    if (String(url).includes('/model/')) {
+      return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+    }
+    return jsonResponse({ choices: [{ message: { content: '{"recommendation":"COMMENT"}' } }] });
+  };
+  const config = baseCompletionConfig();
+  delete config.structuredOutputMode;
+
+  await chatCompletion(config);
+
+  assert.deepEqual(calls, [
+    'https://openrouter.ai/api/v1/model/openai/gpt-5.5',
+    'https://openrouter.ai/api/v1/chat/completions',
+  ]);
+});
+
 test('non-empty structured response is used without a fallback even when it is not JSON', async () => {
   for (const content of ['## Markdown review', '{malformed json']) {
     clearOpenRouterCapabilityCache();

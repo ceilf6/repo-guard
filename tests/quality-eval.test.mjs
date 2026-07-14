@@ -217,7 +217,7 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     model: 'mimo-v2.5-pro',
     maxTokens: 3200,
     outputDir: 'quality-eval-results',
-    structuredOutput: 'off',
+    structuredOutput: 'auto',
   });
 
   assert.deepEqual(getEnvConfig({
@@ -234,7 +234,7 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     model: 'gpt-test',
     maxTokens: 1024,
     outputDir: '/tmp/eval',
-    structuredOutput: 'off',
+    structuredOutput: 'auto',
   });
 
   assert.equal(getEnvConfig({

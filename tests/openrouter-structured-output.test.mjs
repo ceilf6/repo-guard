@@ -8,9 +8,9 @@ import {
 
 test.beforeEach(() => clearOpenRouterCapabilityCache());
 
-test('parseStructuredOutputMode defaults to off and accepts auto', () => {
-  assert.equal(parseStructuredOutputMode(), 'off');
-  assert.equal(parseStructuredOutputMode(''), 'off');
+test('parseStructuredOutputMode defaults to auto and accepts explicit off', () => {
+  assert.equal(parseStructuredOutputMode(), 'auto');
+  assert.equal(parseStructuredOutputMode(''), 'auto');
   assert.equal(parseStructuredOutputMode('off'), 'off');
   assert.equal(parseStructuredOutputMode('auto'), 'auto');
 });
