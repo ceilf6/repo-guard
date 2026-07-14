@@ -1,0 +1,23 @@
+scripts/review-logic.mjs
+  s_29700ba6a47311::t_ea217c5368c7e9 222,226-228,250-253,269-281,291,300,303,417-435,445,448,451,830-838,880,906-921
+tests/review-logic.test.mjs
+  s_29700ba6a47311::t_80c3a73b4fe362 133-182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ce1d1faaa6f9c1a2b1cc4fef05628e358cf3882e",
+  "prompts": {},
+  "sessions": {
+    "s_29700ba6a47311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5eb6-3e4d-7062-9f1a-02e08ad74c4d",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
