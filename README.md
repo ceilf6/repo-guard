@@ -92,10 +92,11 @@ jobs:
 | `model` | No | `gpt-4o` | Model name |
 | `api-key` | Yes | — | LLM API key |
 | `base-url` | No | `""` | Custom API base URL |
-| `max-tokens` | No | `4096` | Max response tokens |
 | `structured-output` | No | `auto` | OpenRouter Structured Outputs mode: `off` or `auto` |
 | `github-token` | No | `github.token` | GitHub token |
 | `extra-instructions` | No | `""` | Additional prompt instructions |
+
+Repo Guard does not impose an output-token limit on OpenAI-compatible requests, including OpenRouter. Anthropic Messages requires the parameter, so the Action supplies `max_tokens: 16384` internally; it is not configurable across providers.
 
 ## Comment Triggers
 

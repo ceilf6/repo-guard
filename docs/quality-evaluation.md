@@ -32,13 +32,13 @@ Equivalent names:
 - `LLM_BASE_URL`
 - `LLM_API_KEY`
 - `LLM_MODEL`
-- `LLM_MAX_TOKENS`
 - `STRUCTURED_OUTPUT` or `LLM_STRUCTURED_OUTPUT` (`auto` by default; use `off` to force the legacy free-text path)
 
 Optional:
 
 - `QUALITY_EVAL_OUTPUT_DIR`: defaults to `quality-eval-results`
-- `MAX_TOKENS`: defaults to `3200`
+
+Token-budget behavior matches production: OpenAI-compatible requests omit an output-token limit, while Anthropic Messages uses the internal required value `16384`.
 
 When Structured Outputs is enabled, PR fixtures use the compact PR V2 schema and Issue fixtures use the compact Issue V2 schema. These schemas strictly type the machine-stable fields while keeping all existing review dimensions in complete content blocks. The rendered PR and Issue Markdown sections are unchanged, and V1 deep-schema responses remain accepted by the normalizer.
 

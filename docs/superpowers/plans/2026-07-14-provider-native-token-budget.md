@@ -203,9 +203,9 @@ Run: `node --test tests/structured-output-config.test.mjs tests/quality-eval.tes
 
 Expected: both files PASS.
 
-Run: `rg -n "maxTokens|LLM_MAX_TOKENS|max-tokens|DEFAULT_MAX_TOKENS" action.yml .github scripts tests README.md docs/quality-evaluation.md`
+Run: `rg -n "maxTokens|LLM_MAX_TOKENS|max-tokens|DEFAULT_MAX_TOKENS" action.yml .github scripts`
 
-Expected: no matches.
+Expected: no matches. Tests intentionally retain the retired names as negative-regression fixtures, and user documentation is updated in Task 5.
 
 - [ ] **Step 5: Commit the public configuration removal**
 
@@ -475,7 +475,7 @@ Token-budget behavior matches production: OpenAI-compatible requests omit an out
 
 - [ ] **Step 2: Check docs and source for obsolete settings**
 
-Run: `rg -n "maxTokens|LLM_MAX_TOKENS|max-tokens|DEFAULT_MAX_TOKENS" action.yml .github scripts tests README.md docs/quality-evaluation.md`
+Run: `rg -n "maxTokens|LLM_MAX_TOKENS|max-tokens|DEFAULT_MAX_TOKENS" action.yml .github scripts README.md docs/quality-evaluation.md`
 
 Expected: no matches. Historical design/plan documents under `docs/superpowers/` are excluded because they record prior decisions.
 
