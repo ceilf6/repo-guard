@@ -8,6 +8,7 @@ const STRUCTURED_OUTPUT_INSTRUCTION = [
   'Schema 字段承载原 Markdown 输出契约的同等语义。',
   '不要输出 Markdown fence、额外解释或 schema 外字段。',
 ].join('\n');
+const ANTHROPIC_MAX_TOKENS = 16384;
 
 /**
  * Normalize provider base URL to the correct API root.
@@ -68,25 +69,24 @@ function httpError(status) {
   return error;
 }
 
-function buildOpenAIRequest(model, messages, system, maxTokens, { temperature = true } = {}) {
+function buildOpenAIRequest(model, messages, system, { temperature = true } = {}) {
   const msgs = [];
   if (system) msgs.push({ role: 'system', content: system });
   msgs.push(...messages);
   const body = {
     model,
     messages: msgs,
-    max_tokens: maxTokens,
   };
   if (temperature) body.temperature = 0.3;
   return body;
 }
 
-function buildAnthropicRequest(model, messages, system, maxTokens) {
+function buildAnthropicRequest(model, messages, system) {
   return {
     model,
     system: system || undefined,
     messages,
-    max_tokens: maxTokens,
+    max_tokens: ANTHROPIC_MAX_TOKENS,
   };
 }
 
@@ -138,7 +138,6 @@ export async function chatCompletion({
   model,
   apiKey,
   baseURL,
-  maxTokens,
   messages,
   system,
   structuredOutputMode = 'auto',
@@ -148,7 +147,7 @@ export async function chatCompletion({
 
   if (provider === 'anthropic') {
     const url = `${base}/messages`;
-    const body = buildAnthropicRequest(model, messages, system, maxTokens);
+    const body = buildAnthropicRequest(model, messages, system);
     const res = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
@@ -164,7 +163,7 @@ export async function chatCompletion({
 
   // OpenAI-compatible
   const url = `${base}/chat/completions`;
-  const legacyBody = buildOpenAIRequest(model, messages, system, maxTokens);
+  const legacyBody = buildOpenAIRequest(model, messages, system);
   const structuredSupported = responseFormat && await supportsOpenRouterStructuredOutputs({
     mode: structuredOutputMode,
     provider,
@@ -186,7 +185,6 @@ export async function chatCompletion({
       model,
       messages,
       system ? `${system}${STRUCTURED_OUTPUT_INSTRUCTION}` : STRUCTURED_OUTPUT_INSTRUCTION.trimStart(),
-      maxTokens,
       { temperature: false },
     ),
     response_format: responseFormat,

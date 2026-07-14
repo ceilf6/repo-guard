@@ -27,13 +27,17 @@ function baseCompletionConfig(overrides = {}) {
     model: 'openai/gpt-5.5',
     apiKey: 'secret',
     baseURL: 'https://openrouter.ai/api/v1',
-    maxTokens: 4096,
     messages: [{ role: 'user', content: 'review' }],
     system: 'system prompt',
     structuredOutputMode: 'auto',
     responseFormat: PR_REVIEW_RESPONSE_FORMAT,
     ...overrides,
   };
+}
+
+function assertNoOutputTokenLimit(body) {
+  assert.equal('max_tokens' in body, false);
+  assert.equal('max_completion_tokens' in body, false);
 }
 
 test('normalizeBaseURL uses provider defaults', () => {
@@ -68,6 +72,7 @@ test('off mode sends the legacy OpenAI request without probing', async () => {
   assert.equal('provider' in calls[0].body, false);
   assert.equal(calls[0].body.messages[0].content, 'system prompt');
   assert.equal(calls[0].body.temperature, 0.3);
+  assertNoOutputTokenLimit(calls[0].body);
 });
 
 test('auto mode keeps non-OpenRouter OpenAI-compatible requests unchanged', async () => {
@@ -83,6 +88,7 @@ test('auto mode keeps non-OpenRouter OpenAI-compatible requests unchanged', asyn
   assert.equal(calls.length, 1);
   assert.equal('response_format' in calls[0].body, false);
   assert.equal('provider' in calls[0].body, false);
+  assertNoOutputTokenLimit(calls[0].body);
 });
 
 test('supported OpenRouter model sends strict response format and routing requirement', async () => {
@@ -106,6 +112,7 @@ test('supported OpenRouter model sends strict response format and routing requir
   assert.deepEqual(calls[1].body.provider, { require_parameters: true });
   assert.equal('temperature' in calls[1].body, false);
   assert.match(calls[1].body.messages[0].content, /本次响应必须遵守请求携带的 JSON Schema/);
+  assertNoOutputTokenLimit(calls[1].body);
 });
 
 test('omitted mode defaults to OpenRouter capability detection', async () => {
@@ -166,6 +173,8 @@ test('structured request error falls back once with the original request', async
   assert.equal(modelBodies[1].messages[0].content, 'system prompt');
   assert.equal('temperature' in modelBodies[0], false);
   assert.equal(modelBodies[1].temperature, 0.3);
+  assertNoOutputTokenLimit(modelBodies[0]);
+  assertNoOutputTokenLimit(modelBodies[1]);
 });
 
 test('missing or blank structured content falls back once', async () => {
@@ -328,4 +337,5 @@ test('anthropic auto mode keeps the native message request unchanged', async () 
   assert.equal(calls[0].url, 'https://api.anthropic.com/v1/messages');
   assert.equal('response_format' in calls[0].body, false);
   assert.equal('provider' in calls[0].body, false);
+  assert.equal(calls[0].body.max_tokens, 16384);
 });
