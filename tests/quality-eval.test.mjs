@@ -215,7 +215,6 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     baseURL: 'https://relay.example.com/anthropic',
     apiKey: 'secret',
     model: 'mimo-v2.5-pro',
-    maxTokens: 3200,
     outputDir: 'quality-eval-results',
     structuredOutput: 'auto',
   });
@@ -232,7 +231,6 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     baseURL: 'https://relay.example.com/v1',
     apiKey: 'secret',
     model: 'gpt-test',
-    maxTokens: 1024,
     outputDir: '/tmp/eval',
     structuredOutput: 'auto',
   });

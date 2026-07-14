@@ -10,7 +10,6 @@ import { getReviewResponseFormat } from './review-contracts.mjs';
 
 export { getChangedNewLines };
 
-const DEFAULT_MAX_TOKENS = 3200;
 const DEFAULT_OUTPUT_DIR = 'quality-eval-results';
 
 function prInfo(overrides = {}) {
@@ -224,7 +223,6 @@ export function getEnvConfig(env = process.env) {
     baseURL: env.BASE_URL || env.LLM_BASE_URL || '',
     apiKey: env.API_KEY || env.LLM_API_KEY || '',
     model: env.MODEL || env.LLM_MODEL || '',
-    maxTokens: Number.parseInt(env.MAX_TOKENS || env.LLM_MAX_TOKENS || `${DEFAULT_MAX_TOKENS}`, 10),
     structuredOutput: parseStructuredOutputMode(env.STRUCTURED_OUTPUT || env.LLM_STRUCTURED_OUTPUT),
     outputDir: env.QUALITY_EVAL_OUTPUT_DIR || DEFAULT_OUTPUT_DIR,
   };
@@ -313,7 +311,6 @@ export async function runQualityEvaluation(config = getEnvConfig()) {
       model: config.model,
       apiKey: config.apiKey,
       baseURL: config.baseURL,
-      maxTokens: config.maxTokens,
       structuredOutputMode: config.structuredOutput,
       responseFormat: getReviewResponseFormat(fixture.kind),
       system: fixture.system,
@@ -341,9 +338,6 @@ function validateConfig(config) {
   if (!config.provider) missing.push('PROVIDER or LLM_PROVIDER');
   if (!config.model) missing.push('MODEL or LLM_MODEL');
   if (!config.apiKey) missing.push('API_KEY or LLM_API_KEY');
-  if (!Number.isInteger(config.maxTokens) || config.maxTokens <= 0) {
-    missing.push('MAX_TOKENS or LLM_MAX_TOKENS as a positive integer');
-  }
   if (missing.length > 0) {
     throw new Error(`Missing quality evaluation config: ${missing.join(', ')}`);
   }

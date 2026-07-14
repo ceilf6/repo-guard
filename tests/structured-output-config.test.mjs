@@ -13,3 +13,14 @@ test('Action and repository workflows default structured output to auto', () => 
   assert.match(repositoryWorkflow, /vars\.LLM_STRUCTURED_OUTPUT \|\| 'auto'/);
   assert.match(externalWorkflow, /vars\.LLM_STRUCTURED_OUTPUT \|\| 'auto'/);
 });
+
+test('Action and workflows do not expose a cross-provider token limit', () => {
+  const files = [
+    read('../action.yml'),
+    read('../.github/workflows/repo-guard.yml'),
+    read('../.github/workflows/external-repo-guard.yml'),
+  ];
+  for (const file of files) {
+    assert.doesNotMatch(file, /max-tokens|LLM_MAX_TOKENS/);
+  }
+});

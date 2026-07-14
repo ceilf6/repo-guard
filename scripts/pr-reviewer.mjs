@@ -32,7 +32,6 @@ export async function buildPRReview(config) {
     model: config.model,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
-    maxTokens: config.maxTokens,
     structuredOutputMode: config.structuredOutput,
     responseFormat: PR_REVIEW_RESPONSE_FORMAT,
     system: systemPrompt,
