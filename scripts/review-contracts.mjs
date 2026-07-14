@@ -23,7 +23,7 @@ const responseFormat = (name, schema) => ({
   json_schema: { name, strict: true, schema },
 });
 
-const PR_FINDING = strictObject({
+const PR_FINDING_V1 = strictObject({
   severity: enumString(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], 'Severity supported by Repo Guard.'),
   title: string('Short actionable finding title.'),
   evidence: string('Concrete diff evidence without fabricated facts.'),
@@ -34,7 +34,7 @@ const PR_FINDING = strictObject({
   inline_comment: nullableString('Concise inline comment body, or null without an exact changed location.'),
 }, 'One PR review finding.');
 
-const PR_SCHEMA = strictObject({
+const PR_SCHEMA_V1 = strictObject({
   risk_level: enumString(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], 'Overall merge risk.'),
   recommendation: enumString(['APPROVE', 'COMMENT', 'REQUEST_CHANGES', 'NEEDS_HUMAN'], 'Merge recommendation.'),
   decision_summary: string('One sentence stating merge readiness and the main reason.'),
@@ -44,7 +44,7 @@ const PR_SCHEMA = strictObject({
     outside_changeset_callers: string('Identified callers or unknown.'),
     confidence: enumString(['high', 'medium', 'degraded'], 'Confidence in cascade coverage.'),
   }, 'Cascade impact analysis.'),
-  findings: { type: 'array', items: PR_FINDING, description: 'Actionable findings; empty when none exist.' },
+  findings: { type: 'array', items: PR_FINDING_V1, description: 'Actionable findings; empty when none exist.' },
   karpathy_review: strictObject({
     assumptions: string('Material assumptions or ambiguity.'),
     simplicity: string('Whether the change is proportional and avoids speculative complexity.'),
@@ -54,7 +54,7 @@ const PR_SCHEMA = strictObject({
   missing_coverage: stringArray('Tests or scenarios still needed before merge.'),
 }, 'Complete Repo Guard PR review.');
 
-const ISSUE_SCHEMA = strictObject({
+const ISSUE_SCHEMA_V1 = strictObject({
   quality_score: { type: 'integer', minimum: 1, maximum: 5, description: 'Issue quality from 1 to 5.' },
   priority_suggestion: enumString(['P0_CRITICAL', 'P1_HIGH', 'P2_MEDIUM', 'P3_LOW'], 'Evidence-based priority.'),
   issue_type: enumString(['BUG_REPORT', 'FEATURE_REQUEST', 'QUESTION', 'DISCUSSION'], 'Issue type.'),
@@ -81,8 +81,39 @@ const ISSUE_SCHEMA = strictObject({
   summary: string('One or two sentence overall assessment.'),
 }, 'Complete Repo Guard Issue assessment.');
 
-export const PR_REVIEW_RESPONSE_FORMAT = responseFormat('repo_guard_pr_review', PR_SCHEMA);
-export const ISSUE_REVIEW_RESPONSE_FORMAT = responseFormat('repo_guard_issue_review', ISSUE_SCHEMA);
+const PR_FINDING_V2 = strictObject({
+  severity: enumString(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], 'Severity supported by Repo Guard.'),
+  title: string('Short actionable finding title.'),
+  details: string('Complete evidence, affected flows, and smallest viable fix.'),
+  path: nullableString('Repository-relative path, or null without an exact changed location.'),
+  line: nullableLine,
+  inline_comment: nullableString('Concise inline comment body, or null without an exact changed location.'),
+}, 'One compact PR review finding.');
+
+const PR_SCHEMA_V2 = strictObject({
+  risk_level: enumString(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], 'Overall merge risk.'),
+  recommendation: enumString(['APPROVE', 'COMMENT', 'REQUEST_CHANGES', 'NEEDS_HUMAN'], 'Merge recommendation.'),
+  decision_summary: string('One sentence stating merge readiness and the main reason.'),
+  cascade_analysis: string('Complete cascade analysis covering changed symbols, affected flows, outside callers, and confidence.'),
+  findings: { type: 'array', items: PR_FINDING_V2, description: 'Actionable findings; empty when none exist.' },
+  karpathy_review: string('Complete review covering assumptions, simplicity, surgical scope, and verification.'),
+  missing_coverage: stringArray('Tests or scenarios still needed before merge.'),
+}, 'Compact machine-stable Repo Guard PR review with complete content blocks.');
+
+const ISSUE_SCHEMA_V2 = strictObject({
+  quality_score: { type: 'integer', minimum: 1, maximum: 5, description: 'Issue quality from 1 to 5.' },
+  priority_suggestion: enumString(['P0_CRITICAL', 'P1_HIGH', 'P2_MEDIUM', 'P3_LOW'], 'Evidence-based priority.'),
+  issue_type: enumString(['BUG_REPORT', 'FEATURE_REQUEST', 'QUESTION', 'DISCUSSION'], 'Issue type.'),
+  maintainer_next_action: enumString(['READY_TO_START', 'ASK_REPORTER', 'TRIAGE_DECISION', 'REPRODUCE'], 'Immediate maintainer action.'),
+  completeness: string('Complete assessment of problem statement, reproduction, expected versus actual, environment, and evidence.'),
+  clarity: string('Complete assessment of title, single concern, language precision, and scope.'),
+  actionability: string('Complete assessment of readiness, acceptance criteria, and dependencies.'),
+  suggestions: stringArray('Concrete reporter or maintainer suggestions.'),
+  summary: string('One or two sentence overall assessment.'),
+}, 'Compact machine-stable Repo Guard Issue assessment with complete content blocks.');
+
+export const PR_REVIEW_RESPONSE_FORMAT = responseFormat('repo_guard_pr_review_v2', PR_SCHEMA_V2);
+export const ISSUE_REVIEW_RESPONSE_FORMAT = responseFormat('repo_guard_issue_review_v2', ISSUE_SCHEMA_V2);
 
 const RISK = { LOW: '低', MEDIUM: '中', HIGH: '高', CRITICAL: '致命' };
 const RECOMMENDATION = { APPROVE: '批准', COMMENT: '评论', REQUEST_CHANGES: '请求修改', NEEDS_HUMAN: '需要人工判断' };
@@ -97,11 +128,19 @@ export function getReviewResponseFormat(kind) {
 }
 
 export function isCanonicalPRReview(value) {
-  return matchesSchema(value, PR_SCHEMA);
+  return matchesSchema(value, PR_SCHEMA_V1);
 }
 
 export function isCanonicalIssueReview(value) {
-  return matchesSchema(value, ISSUE_SCHEMA);
+  return matchesSchema(value, ISSUE_SCHEMA_V1);
+}
+
+export function isStructuredPRReviewV2(value) {
+  return matchesSchema(value, PR_SCHEMA_V2);
+}
+
+export function isStructuredIssueReviewV2(value) {
+  return matchesSchema(value, ISSUE_SCHEMA_V2);
 }
 
 export function renderCanonicalPRReview(review, title = 'PR Review') {
@@ -182,6 +221,67 @@ export function renderCanonicalIssueReview(review, title = 'Issue Review') {
   ].join('\n');
 }
 
+export function renderStructuredPRReviewV2(review, title = 'PR Review') {
+  const findings = review.findings.length === 0
+    ? '未发现 blocking findings。'
+    : review.findings.map((finding, index) => [
+      `${index + 1}. **[${RISK[finding.severity]}] ${singleLine(finding.title)}**`,
+      indentBlock(finding.details, '   '),
+    ].join('\n')).join('\n');
+  const inline = review.findings
+    .filter((finding) => finding.path && Number.isInteger(finding.line) && finding.inline_comment)
+    .map((finding) => `- [${finding.path}:${finding.line}] ${singleLine(finding.inline_comment)}`);
+
+  return [
+    `## 代码评审报告: ${title || 'PR Review'}`,
+    '',
+    `**风险等级:** ${RISK[review.risk_level]}`,
+    `**处理建议:** ${RECOMMENDATION[review.recommendation]}`,
+    `**决策摘要:** ${singleLine(review.decision_summary)}`,
+    '',
+    '### 级联分析',
+    contentBlock(review.cascade_analysis),
+    '',
+    '### 问题发现',
+    findings,
+    '',
+    '### 行级发现',
+    inline.length > 0 ? inline.join('\n') : '- 无明确变更行归属。',
+    '',
+    '### Karpathy 评审',
+    contentBlock(review.karpathy_review),
+    '',
+    '### 缺失覆盖',
+    bulletList(review.missing_coverage, '验证覆盖与当前风险匹配。'),
+  ].join('\n');
+}
+
+export function renderStructuredIssueReviewV2(review, title = 'Issue Review') {
+  return [
+    `## Issue 分析: ${title || 'Issue Review'}`,
+    '',
+    `**质量评分:** ${review.quality_score}/5`,
+    `**优先级建议:** ${PRIORITY[review.priority_suggestion]}`,
+    `**类型:** ${ISSUE_TYPE[review.issue_type]}`,
+    `**维护者下一步动作:** ${NEXT_ACTION[review.maintainer_next_action]}`,
+    '',
+    '### 完整性',
+    contentBlock(review.completeness),
+    '',
+    '### 清晰度',
+    contentBlock(review.clarity),
+    '',
+    '### 可执行性',
+    contentBlock(review.actionability),
+    '',
+    '### 建议',
+    bulletList(review.suggestions, '无需报告者继续补充。'),
+    '',
+    '### 总结',
+    contentBlock(review.summary),
+  ].join('\n');
+}
+
 function isObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
@@ -212,6 +312,17 @@ function matchesSchema(value, schema) {
 
 function singleLine(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function contentBlock(value) {
+  return String(value || '').trim();
+}
+
+function indentBlock(value, prefix) {
+  return contentBlock(value)
+    .split(/\r?\n/)
+    .map((line) => `${prefix}${line}`)
+    .join('\n');
 }
 
 function listText(values) {

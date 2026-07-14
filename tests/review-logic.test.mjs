@@ -101,6 +101,85 @@ test('normalizeReviewResponse preserves canonical Issue rubric values', () => {
   assert.match(normalized, /- 请补充稳定复现步骤。/);
 });
 
+test('normalizeReviewResponse renders V2 content blocks without losing details', () => {
+  const response = JSON.stringify({
+    risk_level: 'HIGH',
+    recommendation: 'REQUEST_CHANGES',
+    decision_summary: 'v2-decision-marker',
+    cascade_analysis: 'v2-cascade-marker',
+    findings: [{
+      severity: 'HIGH',
+      title: 'v2-finding-marker',
+      details: 'v2-evidence-marker\nv2-impact-marker\nv2-fix-marker',
+      path: 'src/auth.js',
+      line: 12,
+      inline_comment: 'v2-inline-marker',
+    }],
+    karpathy_review: 'v2-karpathy-marker',
+    missing_coverage: ['v2-coverage-marker'],
+  });
+
+  const normalized = normalizeReviewResponse(response, { type: 'pr', title: 'V2 review' });
+
+  for (const marker of [
+    'v2-decision-marker', 'v2-cascade-marker', 'v2-finding-marker', 'v2-evidence-marker',
+    'v2-impact-marker', 'v2-fix-marker', 'v2-inline-marker', 'v2-karpathy-marker',
+    'v2-coverage-marker',
+  ]) {
+    assert.match(normalized, new RegExp(marker));
+  }
+});
+
+test('normalizeReviewResponse preserves near-valid V2 content instead of replacing it with placeholders', () => {
+  const prResponse = JSON.stringify({
+    risk_level: 'HIGH',
+    recommendation: 'REQUEST_CHANGES',
+    decision_summary: 'near-v2-decision-marker',
+    cascade_analysis: 'near-v2-cascade-marker\nnear-v2-caller-marker',
+    findings: [{
+      severity: 'HIGH',
+      title: 'near-v2-finding-marker',
+      details: 'near-v2-evidence-marker\nnear-v2-impact-marker\nnear-v2-fix-marker',
+      path: 'src/auth.js',
+      line: 12,
+      inline_comment: 'near-v2-inline-marker',
+    }],
+    karpathy_review: 'near-v2-assumption-marker\nnear-v2-verification-marker',
+    missing_coverage: ['near-v2-coverage-marker'],
+    unexpected_provider_field: true,
+  });
+  const issueResponse = JSON.stringify({
+    quality_score: 3,
+    priority_suggestion: 'P2_MEDIUM',
+    issue_type: 'BUG_REPORT',
+    maintainer_next_action: 'ASK_REPORTER',
+    completeness: 'near-v2-completeness-marker',
+    clarity: 'near-v2-clarity-marker',
+    actionability: 'near-v2-actionability-marker',
+    suggestions: ['near-v2-suggestion-marker'],
+    summary: 'near-v2-summary-marker',
+    unexpected_provider_field: true,
+  });
+
+  const pr = normalizeReviewResponse(prResponse, { type: 'pr', title: 'Near V2 PR' });
+  const issue = normalizeReviewResponse(issueResponse, { type: 'issue', title: 'Near V2 Issue' });
+
+  for (const marker of [
+    'near-v2-decision-marker', 'near-v2-cascade-marker', 'near-v2-caller-marker',
+    'near-v2-finding-marker', 'near-v2-evidence-marker', 'near-v2-impact-marker',
+    'near-v2-fix-marker', 'near-v2-inline-marker', 'near-v2-assumption-marker',
+    'near-v2-verification-marker', 'near-v2-coverage-marker',
+  ]) {
+    assert.match(pr, new RegExp(marker));
+  }
+  for (const marker of [
+    'near-v2-completeness-marker', 'near-v2-clarity-marker', 'near-v2-actionability-marker',
+    'near-v2-suggestion-marker', 'near-v2-summary-marker',
+  ]) {
+    assert.match(issue, new RegExp(marker));
+  }
+});
+
 test('normalizeReviewResponse tolerates non-empty partial contract JSON', () => {
   const partialPR = JSON.stringify({
     decision_summary: 'Partial but usable review.',

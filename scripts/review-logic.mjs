@@ -2,8 +2,12 @@
 import {
   isCanonicalIssueReview,
   isCanonicalPRReview,
+  isStructuredIssueReviewV2,
+  isStructuredPRReviewV2,
   renderCanonicalIssueReview,
   renderCanonicalPRReview,
+  renderStructuredIssueReviewV2,
+  renderStructuredPRReviewV2,
 } from './review-contracts.mjs';
 
 const TRIGGER_PATTERNS = [/@ceilf6\/repo-guard/i, /\/review/i];
@@ -92,6 +96,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
   const jsonLike = looksLikeStandaloneJson(trimmed);
   if (context.type === 'pr') {
     if (isValidPRMarkdownContract(trimmed)) return trimmed;
+    if (parsed && isStructuredPRReviewV2(parsed)) return renderStructuredPRReviewV2(parsed, context.title);
     if (parsed && isCanonicalPRReview(parsed)) return renderCanonicalPRReview(parsed, context.title);
     if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title);
     if (parsed) return formatUnknownJsonPRReview(parsed, context.title);
@@ -101,6 +106,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
 
   if (context.type === 'issue') {
     if (isValidIssueMarkdownContract(trimmed)) return trimmed;
+    if (parsed && isStructuredIssueReviewV2(parsed)) return renderStructuredIssueReviewV2(parsed, context.title);
     if (parsed && isCanonicalIssueReview(parsed)) return renderCanonicalIssueReview(parsed, context.title);
     if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title);
     if (parsed) return formatUnknownJsonIssueReview(parsed, context.title);
@@ -213,9 +219,13 @@ function looksLikeStructuredPRReview(value) {
     !Array.isArray(value) &&
     (
       'summary' in value ||
+      'decision_summary' in value ||
       'findings' in value ||
       'risk_level' in value ||
       'recommendation' in value ||
+      'cascade_analysis' in value ||
+      'karpathy_review' in value ||
+      'missing_coverage' in value ||
       '决策摘要' in value ||
       '摘要' in value ||
       '总结' in value ||
@@ -237,6 +247,10 @@ function looksLikeStructuredIssueReview(value) {
       'priority_suggestion' in value ||
       'maintainer_next_action' in value ||
       'suggestions' in value ||
+      'completeness' in value ||
+      'clarity' in value ||
+      'actionability' in value ||
+      'summary' in value ||
       '质量评分' in value ||
       '优先级建议' in value ||
       '维护者下一步动作' in value ||
@@ -252,7 +266,19 @@ function formatStructuredPRReview(review, title = 'PR Review') {
     ...asArray(review.findings || review['问题发现']),
     ...asArray(review.inline_findings || review['行级发现']),
   ];
-  const summary = toSingleLine(firstPresent(review.summary, review['决策摘要'], review['摘要'], review['总结'], review.recommendation, review['处理建议'], '模型返回了结构化 JSON，已归一化为 Repo Guard Markdown 契约。'));
+  const summary = toSingleLine(firstPresent(review.decision_summary, review.summary, review['决策摘要'], review['摘要'], review['总结'], review.recommendation, review['处理建议'], '模型返回了结构化 JSON，已归一化为 Repo Guard Markdown 契约。'));
+  const cascadeAnalysis = contentBlockOr(review.cascade_analysis, [
+    '- 变更符号: 未在模型 JSON 中提供',
+    '- 受影响流程: 未在模型 JSON 中提供',
+    '- 变更集外调用方: unknown',
+    '- 置信度: degraded',
+  ].join('\n'));
+  const karpathyReview = contentBlockOr(review.karpathy_review, [
+    '- 假设: 模型返回了非契约 JSON，发布前已做格式归一化。',
+    '- 简洁性: 已提升 summary、findings 与 recommendation 的可读字段；原始 JSON 不再附在评论中，避免污染下游解析。',
+    '- 变更范围: 未在模型 JSON 中提供',
+    '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
+  ].join('\n'));
 
   return [
     `## 代码评审报告: ${title || 'PR Review'}`,
@@ -262,10 +288,7 @@ function formatStructuredPRReview(review, title = 'PR Review') {
     `**决策摘要:** ${summary}`,
     '',
     '### 级联分析',
-    '- 变更符号: 未在模型 JSON 中提供',
-    '- 受影响流程: 未在模型 JSON 中提供',
-    '- 变更集外调用方: unknown',
-    '- 置信度: degraded',
+    cascadeAnalysis,
     '',
     '### 问题发现',
     formatFindings(findings),
@@ -274,13 +297,10 @@ function formatStructuredPRReview(review, title = 'PR Review') {
     formatInlineFindings(findings),
     '',
     '### Karpathy 评审',
-    '- 假设: 模型返回了非契约 JSON，发布前已做格式归一化。',
-    '- 简洁性: 已提升 summary、findings 与 recommendation 的可读字段；原始 JSON 不再附在评论中，避免污染下游解析。',
-    '- 变更范围: 未在模型 JSON 中提供',
-    '- 验证: 需要查看 CI、测试或人工 CR 证据补强合并信心。',
+    karpathyReview,
     '',
     '### 缺失覆盖',
-    '- 输出未命中 Repo Guard Markdown 契约；建议补充真实模型质量评估覆盖。',
+    formatBullets(review.missing_coverage, '输出未命中 Repo Guard Markdown 契约；建议补充真实模型质量评估覆盖。'),
   ].join('\n');
 }
 
@@ -394,6 +414,25 @@ function formatInvalidJsonPRReview(title = 'PR Review') {
 }
 
 function formatStructuredIssueReview(review, title = 'Issue Review') {
+  const completeness = contentBlockOr(review.completeness, [
+    '- 问题陈述: 未在模型 JSON 中提供',
+    '- 复现步骤: 未在模型 JSON 中提供',
+    '- 预期与实际: 未在模型 JSON 中提供',
+    '- 环境信息: 未在模型 JSON 中提供',
+    '- 支撑证据: 未在模型 JSON 中提供',
+  ].join('\n'));
+  const clarity = contentBlockOr(review.clarity, [
+    '- 标题质量: 未在模型 JSON 中提供',
+    '- 单一关注点: 未在模型 JSON 中提供',
+    '- 表达精确度: 未在模型 JSON 中提供',
+    '- 范围: 未在模型 JSON 中提供',
+  ].join('\n'));
+  const actionability = contentBlockOr(review.actionability, [
+    '- 是否可开始: 未在模型 JSON 中提供',
+    '- 验收标准: 未在模型 JSON 中提供',
+    '- 依赖: 未在模型 JSON 中提供',
+  ].join('\n'));
+
   return [
     `## Issue 分析: ${title || 'Issue Review'}`,
     '',
@@ -403,22 +442,13 @@ function formatStructuredIssueReview(review, title = 'Issue Review') {
     `**维护者下一步动作:** ${formatMaintainerAction(review.maintainer_next_action || review.next_action || review.action || review['维护者下一步动作'])}`,
     '',
     '### 完整性',
-    '- 问题陈述: 未在模型 JSON 中提供',
-    '- 复现步骤: 未在模型 JSON 中提供',
-    '- 预期与实际: 未在模型 JSON 中提供',
-    '- 环境信息: 未在模型 JSON 中提供',
-    '- 支撑证据: 未在模型 JSON 中提供',
+    completeness,
     '',
     '### 清晰度',
-    '- 标题质量: 未在模型 JSON 中提供',
-    '- 单一关注点: 未在模型 JSON 中提供',
-    '- 表达精确度: 未在模型 JSON 中提供',
-    '- 范围: 未在模型 JSON 中提供',
+    clarity,
     '',
     '### 可执行性',
-    '- 是否可开始: 未在模型 JSON 中提供',
-    '- 验收标准: 未在模型 JSON 中提供',
-    '- 依赖: 未在模型 JSON 中提供',
+    actionability,
     '',
     '### 建议',
     formatSuggestions(review.suggestions || review.recommendations || review.recommendation || review['建议']),
@@ -797,6 +827,15 @@ function formatFindings(findings) {
 
   return findings.map((finding, index) => {
     const normalized = normalizeFinding(finding);
+    const details = finding && typeof finding === 'object' && typeof finding.details === 'string'
+      ? finding.details.trim()
+      : '';
+    if (details) {
+      return [
+        `${index + 1}. **[${normalized.severity}] ${normalized.title}**`,
+        indentBlock(details, '   '),
+      ].join('\n');
+    }
     return [
       `${index + 1}. **[${normalized.severity}] ${normalized.title}**`,
       `   - 证据: ${normalized.evidence}`,
@@ -838,7 +877,7 @@ function normalizeFinding(finding) {
     fix: toSingleLine(value.fix || value.recommendation || value.suggestion || value['建议'] || '根据上述发现补充最小修复'),
     path: value.path || value.file || value['文件'],
     line: Number.isInteger(value.line || value['行号']) ? (value.line || value['行号']) : Number.parseInt(value.line || value['行号'], 10),
-    body: toSingleLine(value.body || value.comment || value.description || value['问题'] || title),
+    body: toSingleLine(value.inline_comment || value.body || value.comment || value.description || value['问题'] || title),
   };
 }
 
@@ -862,6 +901,22 @@ function asArray(value) {
 
 function firstPresent(...values) {
   return values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
+}
+
+function contentBlockOr(value, fallback) {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function indentBlock(value, prefix) {
+  return String(value)
+    .split(/\r?\n/)
+    .map((line) => `${prefix}${line}`)
+    .join('\n');
+}
+
+function formatBullets(value, emptyText) {
+  const items = asArray(value).map(toSingleLine).filter(Boolean);
+  return items.length > 0 ? items.map((item) => `- ${item}`).join('\n') : `- ${emptyText}`;
 }
 
 export function extractInlineComments(response, files) {

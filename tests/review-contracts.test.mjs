@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as reviewContracts from '../scripts/review-contracts.mjs';
 import {
   ISSUE_REVIEW_RESPONSE_FORMAT,
   PR_REVIEW_RESPONSE_FORMAT,
@@ -29,6 +30,94 @@ test('PR and Issue response formats use strict complete object schemas', () => {
   assert.equal(getReviewResponseFormat('pr'), PR_REVIEW_RESPONSE_FORMAT);
   assert.equal(getReviewResponseFormat('issue'), ISSUE_REVIEW_RESPONSE_FORMAT);
   assert.throws(() => getReviewResponseFormat('discussion'), /Unsupported review contract kind/);
+});
+
+test('response formats use compact V2 content blocks', () => {
+  const pr = PR_REVIEW_RESPONSE_FORMAT.json_schema.schema;
+  assert.equal(PR_REVIEW_RESPONSE_FORMAT.json_schema.name, 'repo_guard_pr_review_v2');
+  assert.equal(pr.properties.cascade_analysis.type, 'string');
+  assert.equal(pr.properties.karpathy_review.type, 'string');
+  assert.deepEqual(Object.keys(pr.properties.findings.items.properties), [
+    'severity',
+    'title',
+    'details',
+    'path',
+    'line',
+    'inline_comment',
+  ]);
+
+  const issue = ISSUE_REVIEW_RESPONSE_FORMAT.json_schema.schema;
+  assert.equal(ISSUE_REVIEW_RESPONSE_FORMAT.json_schema.name, 'repo_guard_issue_review_v2');
+  assert.equal(issue.properties.completeness.type, 'string');
+  assert.equal(issue.properties.clarity.type, 'string');
+  assert.equal(issue.properties.actionability.type, 'string');
+});
+
+test('V2 PR renderer preserves every current review dimension', () => {
+  const markdown = reviewContracts.renderStructuredPRReviewV2({
+    risk_level: 'HIGH',
+    recommendation: 'REQUEST_CHANGES',
+    decision_summary: 'decision-marker',
+    cascade_analysis: [
+      'changed-symbol-marker',
+      'affected-flow-marker',
+      'outside-caller-marker',
+      'confidence-marker',
+    ].join('\n'),
+    findings: [{
+      severity: 'HIGH',
+      title: 'finding-title-marker',
+      details: 'evidence-marker\nimpact-marker\nsmallest-fix-marker',
+      path: 'src/auth.js',
+      line: 12,
+      inline_comment: 'inline-marker',
+    }],
+    karpathy_review: [
+      'assumption-marker',
+      'simplicity-marker',
+      'scope-marker',
+      'verification-marker',
+    ].join('\n'),
+    missing_coverage: ['coverage-marker'],
+  }, 'V2 PR');
+
+  for (const heading of ['级联分析', '问题发现', '行级发现', 'Karpathy 评审', '缺失覆盖']) {
+    assert.match(markdown, new RegExp(`^### ${heading}$`, 'm'));
+  }
+  for (const marker of [
+    'decision-marker', 'changed-symbol-marker', 'affected-flow-marker', 'outside-caller-marker',
+    'confidence-marker', 'finding-title-marker', 'evidence-marker', 'impact-marker',
+    'smallest-fix-marker', 'inline-marker', 'assumption-marker', 'simplicity-marker',
+    'scope-marker', 'verification-marker', 'coverage-marker',
+  ]) {
+    assert.match(markdown, new RegExp(marker));
+  }
+});
+
+test('V2 Issue renderer preserves every current review dimension', () => {
+  const markdown = reviewContracts.renderStructuredIssueReviewV2({
+    quality_score: 3,
+    priority_suggestion: 'P2_MEDIUM',
+    issue_type: 'BUG_REPORT',
+    maintainer_next_action: 'ASK_REPORTER',
+    completeness: 'problem-marker\nreproduction-marker\nexpected-actual-marker\nenvironment-marker\nevidence-marker',
+    clarity: 'title-marker\nsingle-concern-marker\nlanguage-marker\nscope-marker',
+    actionability: 'ready-marker\nacceptance-marker\ndependency-marker',
+    suggestions: ['suggestion-marker'],
+    summary: 'summary-marker',
+  }, 'V2 Issue');
+
+  for (const heading of ['完整性', '清晰度', '可执行性', '建议', '总结']) {
+    assert.match(markdown, new RegExp(`^### ${heading}$`, 'm'));
+  }
+  for (const marker of [
+    'problem-marker', 'reproduction-marker', 'expected-actual-marker', 'environment-marker',
+    'evidence-marker', 'title-marker', 'single-concern-marker', 'language-marker',
+    'scope-marker', 'ready-marker', 'acceptance-marker', 'dependency-marker',
+    'suggestion-marker', 'summary-marker',
+  ]) {
+    assert.match(markdown, new RegExp(marker));
+  }
 });
 
 test('canonical PR renderer preserves every contract section', () => {
