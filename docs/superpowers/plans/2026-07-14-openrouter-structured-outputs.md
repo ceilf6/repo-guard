@@ -18,7 +18,7 @@
 - Fall back to the existing free-text request exactly once only when the structured request throws or has no non-empty string content.
 - Keep the current `fetchWithRetry` transport behavior.
 - Do not enable Response Healing, streaming, or a new SDK.
-- Preserve existing Markdown, recommendation/event mapping, and inline-comment changed-line validation.
+- Preserve existing Markdown, recommendation/event mapping, path filtering, and GitHub Review API fallback behavior for invalid inline locations.
 - Automated tests must not call real GitHub or LLM APIs.
 - Comments explain background or constraints, not what the code already says.
 - Final integration history must squash temporary red/green/fixup commits into clear result commits.

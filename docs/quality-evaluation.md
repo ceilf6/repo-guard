@@ -33,11 +33,14 @@ Equivalent names:
 - `LLM_API_KEY`
 - `LLM_MODEL`
 - `LLM_MAX_TOKENS`
+- `STRUCTURED_OUTPUT` or `LLM_STRUCTURED_OUTPUT` (`off` by default; use `auto` for OpenRouter capability detection)
 
 Optional:
 
 - `QUALITY_EVAL_OUTPUT_DIR`: defaults to `quality-eval-results`
 - `MAX_TOKENS`: defaults to `3200`
+
+When Structured Outputs is enabled, PR fixtures use the PR review schema and Issue fixtures use the Issue review schema. All fixtures in one evaluation process share the same per-model OpenRouter capability cache. Capability lookup failure or unsupported models use the existing free-text path; a structured response causes one legacy fallback call only when it errors or contains no non-empty text.
 
 ## Outputs
 

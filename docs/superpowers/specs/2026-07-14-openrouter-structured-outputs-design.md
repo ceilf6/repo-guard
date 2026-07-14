@@ -168,7 +168,7 @@ structured-output: off|auto
 - `line`: integer | null
 - `inline_comment`: string | null
 
-`path` 与 `line` 只是候选位置。现有 `extractInlineComments` 仍负责确认文件存在且行号属于真实变更行；schema 合法不代表可以绕过 GitHub inline comment 校验。
+`path` 与 `line` 只是候选位置。现有 `extractInlineComments` 负责确认文件存在；GitHub Review API 负责接受或拒绝候选行号，失败后现有发布逻辑会降级为普通评论。Schema 合法不代表可以绕过这两层现有边界。
 
 `karpathy_review` 包含 assumptions、simplicity、surgical scope 和 verification 四个文本字段。`missing_coverage` 为字符串数组。
 
@@ -310,7 +310,7 @@ structured-output: off|auto
 - 完整 Issue JSON 映射到当前所有 Markdown 字段与章节。
 - 枚举稳定映射为中文标签。
 - null 行号不会产生 inline comment。
-- schema 中存在 path/line 也必须经过现有变更行校验。
+- schema 中存在 path/line 仍必须经过现有文件路径过滤和 GitHub Review API 行号校验。
 - 未识别 JSON、自由文本和 JSON-like 安全外壳的现有测试继续通过。
 - `normalizeReviewResponse` 保持幂等。
 
