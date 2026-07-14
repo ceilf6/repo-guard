@@ -1,0 +1,25 @@
+README.md
+  s_29700ba6a47311::t_6cfb901c60908a 99-100
+docs/quality-evaluation.md
+  s_29700ba6a47311::t_dab3e47c4022a0 40-41
+docs/superpowers/plans/2026-07-14-provider-native-token-budget.md
+  s_29700ba6a47311::t_ceed0945de94bc 206,208,478
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "bb50f84c6ebce4001b72326c35aef37856ef5a8e",
+  "prompts": {},
+  "sessions": {
+    "s_29700ba6a47311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5eb6-3e4d-7062-9f1a-02e08ad74c4d",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
