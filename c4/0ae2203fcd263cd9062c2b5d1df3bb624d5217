@@ -1,0 +1,23 @@
+scripts/llm-client.mjs
+  s_29700ba6a47311::t_a4b16b8ab200f0 97-104,114,169
+tests/llm-client.test.mjs
+  s_29700ba6a47311::t_b2af7d5879cee2 288-328,446-462
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c40ae2203fcd263cd9062c2b5d1df3bb624d5217",
+  "prompts": {},
+  "sessions": {
+    "s_29700ba6a47311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5eb6-3e4d-7062-9f1a-02e08ad74c4d",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
