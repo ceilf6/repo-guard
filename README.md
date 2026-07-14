@@ -81,7 +81,7 @@ jobs:
 | `LLM_PROVIDER` | `openai` | `openai` or `anthropic` |
 | `LLM_MODEL` | `gpt-4o` | Model name |
 | `LLM_BASE_URL` | (empty) | Custom API base URL for relay/proxy |
-| `LLM_STRUCTURED_OUTPUT` | `off` | `off` keeps existing requests; `auto` uses OpenRouter JSON Schema when the selected model advertises support |
+| `LLM_STRUCTURED_OUTPUT` | `auto` | `auto` uses OpenRouter JSON Schema when supported; explicit `off` always uses the legacy free-text request |
 
 ## Inputs
 
@@ -93,7 +93,7 @@ jobs:
 | `api-key` | Yes | — | LLM API key |
 | `base-url` | No | `""` | Custom API base URL |
 | `max-tokens` | No | `4096` | Max response tokens |
-| `structured-output` | No | `off` | OpenRouter Structured Outputs mode: `off` or `auto` |
+| `structured-output` | No | `auto` | OpenRouter Structured Outputs mode: `off` or `auto` |
 | `github-token` | No | `github.token` | GitHub token |
 | `extra-instructions` | No | `""` | Additional prompt instructions |
 
@@ -127,7 +127,7 @@ The dispatcher also uses the normal LLM settings:
 | `LLM_PROVIDER` | Variable | `openai` or `anthropic` |
 | `LLM_MODEL` | Variable | Model name |
 | `LLM_BASE_URL` | Variable | Custom relay/proxy URL |
-| `LLM_STRUCTURED_OUTPUT` | Variable | OpenRouter Structured Outputs mode, default `off` |
+| `LLM_STRUCTURED_OUTPUT` | Variable | OpenRouter Structured Outputs mode, default `auto`; set `off` to force legacy free text |
 | `EXTERNAL_REPO_GUARD_MAX_REVIEWS` | Variable | Maximum external PR reviews per run, default `3` |
 | `EXTERNAL_REPO_GUARD_SEARCH_LIMIT` | Variable | Maximum search results scanned per run, default `20` |
 
@@ -217,7 +217,7 @@ The bot automatically normalizes the URL for the selected provider.
 
 ### OpenRouter Structured Outputs
 
-OpenRouter users can opt into model-native JSON Schema responses without changing the public provider type:
+OpenRouter users get model-native JSON Schema responses automatically when the selected model advertises support, without changing the public provider type:
 
 ```yaml
 with:
@@ -228,7 +228,7 @@ with:
   structured-output: auto
 ```
 
-`auto` checks OpenRouter's public model metadata once per model per process. When the lookup fails or the model does not advertise Structured Outputs support, Repo Guard immediately uses the existing free-text request. When a structured request returns any non-empty text, Repo Guard keeps that response even if it does not match the schema and passes it through the existing normalizer without another model call. Only an error or a response with no usable text triggers one additional legacy free-text model call, which can add model cost. The default `off` mode does not perform metadata lookup and preserves the existing request path.
+`auto` is the default and checks OpenRouter's public model metadata once per model per process. When the lookup fails or the model does not advertise Structured Outputs support, Repo Guard immediately uses the existing free-text request. When a structured request returns any non-empty text, Repo Guard keeps that response even if it does not match the schema and passes it through the existing normalizer without another model call. Only an error or a response with no usable text triggers one additional legacy free-text model call, which can add model cost. Set `structured-output: off` only when you want to skip metadata lookup and always use the existing free-text request.
 
 ### Private intranet models
 

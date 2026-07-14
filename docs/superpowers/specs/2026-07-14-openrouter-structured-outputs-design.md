@@ -23,8 +23,8 @@ OpenRouter 支持 `response_format.type=json_schema`、`strict=true` 和 `provid
 
 ## 目标
 
-1. 允许显式开启 OpenRouter Structured Outputs，使 PR 与 Issue 输出在模型侧尽量匹配完整 JSON Schema。
-2. 默认关闭新能力，确保现有 OpenAI-compatible、Anthropic 和其他中转服务的行为不变。
+1. 默认自动探测 OpenRouter Structured Outputs，使 PR 与 Issue 输出在模型侧尽量匹配完整 JSON Schema。
+2. 仅在显式配置 `off` 时关闭新能力；非 OpenRouter、Anthropic 和其他中转服务仍保持原有行为。
 3. Structured Outputs 不可用时自动使用现有自由文本路径。
 4. 第一次结构化调用只要返回非空模型文本，就保留该信息，不因 schema 不合规而重复调用。
 5. 第一次结构化调用没有返回可用文本时，允许追加一次旧版自由文本调用。
@@ -66,8 +66,8 @@ structured-output: off|auto
 
 语义：
 
-- `off`：默认值。完全沿用现有请求路径，不查询模型元数据，不添加请求参数，不修改 prompt。
-- `auto`：只有在 `provider=openai` 且规范化后的 base URL hostname 严格等于 `openrouter.ai` 时才探测能力。其他 endpoint 直接使用现有自由文本路径。
+- `off`：显式退出。完全沿用现有请求路径，不查询模型元数据，不添加请求参数，不修改 prompt。
+- `auto`：默认值。只有在 `provider=openai` 且规范化后的 base URL hostname 严格等于 `openrouter.ai` 时才探测能力。其他 endpoint 直接使用现有自由文本路径。
 - 其他值：在开始 LLM 调用前报告配置错误，防止拼写错误静默改变行为。
 
 配置需要贯穿：
@@ -78,7 +78,7 @@ structured-output: off|auto
 - `scripts/evaluate-quality.mjs`
 - `scripts/pr-reviewer.mjs` 的 PR 构建配置
 
-仓库内 workflow 从 `vars.LLM_STRUCTURED_OUTPUT` 读取配置并以 `off` 为缺省值；启用由仓库变量显式完成。公共 Action input 的默认值同样保持 `off`。质量评估脚本遵循现有短变量优先约定，同时接受 `STRUCTURED_OUTPUT` 和 `LLM_STRUCTURED_OUTPUT`。
+仓库内 workflow 从 `vars.LLM_STRUCTURED_OUTPUT` 读取配置并以 `auto` 为缺省值；只有仓库变量显式设为 `off` 时才关闭能力探测。公共 Action input 的默认值同样为 `auto`。质量评估脚本遵循现有短变量优先约定，同时接受 `STRUCTURED_OUTPUT` 和 `LLM_STRUCTURED_OUTPUT`。
 
 ## 模块边界
 
@@ -278,7 +278,7 @@ structured-output: off|auto
 
 ### 配置测试
 
-- 缺省值解析为 `off`。
+- 缺省值和空字符串解析为 `auto`。
 - `off` 与 `auto` 被接受。
 - 其他值在调用前报告明确错误。
 - Action input、生产脚本、dispatcher 和质量评估均正确透传配置。
@@ -333,7 +333,7 @@ structured-output: off|auto
 
 文档必须明确：
 
-- 默认关闭，不影响现有 provider。
+- 默认 `auto`，但能力探测仍只针对 OpenRouter，不影响其他 provider。
 - `auto` 只在 OpenRouter 官方 hostname 上工作。
 - 模型能力查询失败时直接使用旧输出。
 - 结构化调用没有产出有效文本时，可能追加一次模型调用并产生相应费用。
@@ -341,12 +341,12 @@ structured-output: off|auto
 
 ## 验收标准
 
-1. 未设置新配置时，现有测试与请求行为保持不变。
+1. 未设置新配置时默认进入 `auto`；非 OpenRouter 和 Anthropic 的请求行为保持不变。
 2. 当前 OpenRouter 配置在 `auto` 下识别 `openai/gpt-5.5` 的 structured output 能力。
 3. 支持模型的 PR 与 Issue 请求携带严格且完整的各自 schema。
 4. 完整结构化响应能无信息缩水地渲染为现有 Markdown 契约。
 5. 任意非空首次模型文本都不会产生第二次调用。
 6. 首次没有可用文本时只追加一次旧版自由文本调用。
-7. 非 OpenRouter、Anthropic 和默认 `off` 路径不接收 OpenRouter 专用参数。
+7. 非 OpenRouter、Anthropic 和显式 `off` 路径不接收 OpenRouter 专用参数。
 8. PR、Issue、dispatcher 和质量评估全部覆盖。
 9. 自动化测试不产生真实 LLM 调用或费用。

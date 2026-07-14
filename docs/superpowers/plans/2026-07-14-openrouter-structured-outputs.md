@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add an opt-in OpenRouter Structured Outputs path for every Repo Guard LLM call while preserving the current request and output behavior by default.
+**Goal:** Add a capability-gated OpenRouter Structured Outputs path for every Repo Guard LLM call while preserving legacy behavior through explicit `off` and automatic fallback.
 
 **Architecture:** Keep `openai` and `anthropic` as the public provider choices. Add a focused OpenRouter capability probe, canonical PR/Issue response contracts, and an optional structured branch inside the existing string-returning LLM client. Every response still flows through `normalizeReviewResponse`; a structured call falls back once only when it produces no non-empty text.
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- `LLM_STRUCTURED_OUTPUT` and Action input `structured-output` accept exactly `off` or `auto`; the default is `off`.
+- `LLM_STRUCTURED_OUTPUT` and Action input `structured-output` accept exactly `off` or `auto`; the default is `auto`.
 - Do not add an `openrouter` provider or change the meanings of `openai` and `anthropic`.
 - Probe capabilities only for `provider=openai`, mode `auto`, and normalized hostname `openrouter.ai`.
 - Do not send credentials in the public model metadata request.
@@ -46,8 +46,8 @@
 - `scripts/evaluate-quality.mjs`: support short/action-compatible mode variables and select schema by fixture kind.
 - `tests/quality-eval.test.mjs`: environment parsing and schema-selection-facing config coverage.
 - `action.yml`: public input and environment mapping.
-- `.github/workflows/repo-guard.yml`: repository variable passthrough with `off` default.
-- `.github/workflows/external-repo-guard.yml`: dispatcher variable passthrough with `off` default.
+- `.github/workflows/repo-guard.yml`: repository variable passthrough with `auto` default.
+- `.github/workflows/external-repo-guard.yml`: dispatcher variable passthrough with `auto` default.
 - `README.md`: configuration, OpenRouter example, compatibility, and fallback cost.
 - `docs/quality-evaluation.md`: quality-evaluation configuration and behavior.
 
@@ -82,9 +82,9 @@ import {
 
 test.beforeEach(() => clearOpenRouterCapabilityCache());
 
-test('parseStructuredOutputMode defaults to off and accepts auto', () => {
-  assert.equal(parseStructuredOutputMode(), 'off');
-  assert.equal(parseStructuredOutputMode(''), 'off');
+test('parseStructuredOutputMode defaults to auto and accepts explicit off', () => {
+  assert.equal(parseStructuredOutputMode(), 'auto');
+  assert.equal(parseStructuredOutputMode(''), 'auto');
   assert.equal(parseStructuredOutputMode('off'), 'off');
   assert.equal(parseStructuredOutputMode('auto'), 'auto');
 });
@@ -753,7 +753,7 @@ async function requestOpenAI({ url, apiKey, body }) {
 
 - [ ] **Step 4: Implement capability-gated structured invocation and fallback**
 
-Extend `chatCompletion` with `structuredOutputMode = 'off'` and `responseFormat`. Replace only the OpenAI-compatible branch with this logic:
+Extend `chatCompletion` with `structuredOutputMode = 'auto'` and `responseFormat`. Replace only the OpenAI-compatible branch with this logic:
 
 ```js
 const url = `${base}/chat/completions`;
@@ -854,7 +854,7 @@ git commit -m "feat: use structured output with safe fallback"
 
 - [ ] **Step 1: Extend quality-evaluation config tests first**
 
-Update the expected objects in `tests/quality-eval.test.mjs` to include `structuredOutput: 'off'`. Add this precedence assertion:
+Update the expected objects in `tests/quality-eval.test.mjs` to include `structuredOutput: 'auto'`. Add this precedence assertion:
 
 ```js
 assert.equal(getEnvConfig({
@@ -919,7 +919,7 @@ Add this input to `action.yml`:
   structured-output:
     description: "OpenRouter structured output mode: 'off' or 'auto'"
     required: false
-    default: "off"
+    default: "auto"
 ```
 
 Map it into the composite step:
@@ -931,13 +931,13 @@ Map it into the composite step:
 Add this input to `.github/workflows/repo-guard.yml`:
 
 ```yaml
-          structured-output: ${{ vars.LLM_STRUCTURED_OUTPUT || 'off' }}
+          structured-output: ${{ vars.LLM_STRUCTURED_OUTPUT || 'auto' }}
 ```
 
 Add this environment value to `.github/workflows/external-repo-guard.yml`:
 
 ```yaml
-          LLM_STRUCTURED_OUTPUT: ${{ vars.LLM_STRUCTURED_OUTPUT || 'off' }}
+          LLM_STRUCTURED_OUTPUT: ${{ vars.LLM_STRUCTURED_OUTPUT || 'auto' }}
 ```
 
 - [ ] **Step 5: Run config, syntax, and full unit tests**
@@ -977,11 +977,11 @@ git commit -m "feat: enable structured output across review flows"
 Add these rows:
 
 ```markdown
-| `LLM_STRUCTURED_OUTPUT` | `off` | `off` keeps existing requests; `auto` uses OpenRouter JSON Schema when the selected model advertises support |
+| `LLM_STRUCTURED_OUTPUT` | `auto` | `auto` uses OpenRouter JSON Schema when supported; explicit `off` always uses the legacy free-text request |
 ```
 
 ```markdown
-| `structured-output` | No | `off` | OpenRouter Structured Outputs mode: `off` or `auto` |
+| `structured-output` | No | `auto` | OpenRouter Structured Outputs mode: `off` or `auto` |
 ```
 
 Add an OpenRouter example using the confirmed configuration:
@@ -1007,7 +1007,7 @@ State explicitly that `auto`:
 Document both variable names:
 
 ```markdown
-- `STRUCTURED_OUTPUT` or `LLM_STRUCTURED_OUTPUT` (`off` by default; use `auto` for OpenRouter capability detection)
+- `STRUCTURED_OUTPUT` or `LLM_STRUCTURED_OUTPUT` (`auto` by default; use `off` to force the legacy free-text path)
 ```
 
 Clarify that PR fixtures use the PR schema, Issue fixtures use the Issue schema, and all fixtures in one process share the model capability cache.

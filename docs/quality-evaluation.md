@@ -33,7 +33,7 @@ Equivalent names:
 - `LLM_API_KEY`
 - `LLM_MODEL`
 - `LLM_MAX_TOKENS`
-- `STRUCTURED_OUTPUT` or `LLM_STRUCTURED_OUTPUT` (`off` by default; use `auto` for OpenRouter capability detection)
+- `STRUCTURED_OUTPUT` or `LLM_STRUCTURED_OUTPUT` (`auto` by default; use `off` to force the legacy free-text path)
 
 Optional:
 
