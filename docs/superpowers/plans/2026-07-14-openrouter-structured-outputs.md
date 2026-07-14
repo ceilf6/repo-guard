@@ -1,5 +1,7 @@
 # OpenRouter Structured Outputs Implementation Plan
 
+> **后续修订：** 本计划记录最初的 V1 深层 schema 实现。当前生效的 V2 紧凑契约、内容完整性和双空响应失败语义见 [设计说明](../specs/2026-07-14-structured-output-minimal-contract-design.md) 与 [实施计划](2026-07-14-structured-output-minimal-contract.md)。V1 响应仍保持兼容。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a capability-gated OpenRouter Structured Outputs path for every Repo Guard LLM call while preserving legacy behavior through explicit `off` and automatic fallback.

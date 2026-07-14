@@ -228,7 +228,11 @@ with:
   structured-output: auto
 ```
 
-`auto` is the default and checks OpenRouter's public model metadata once per model per process. When the lookup fails or the model does not advertise Structured Outputs support, Repo Guard immediately uses the existing free-text request. When a structured request returns any non-empty text, Repo Guard keeps that response even if it does not match the schema and passes it through the existing normalizer without another model call. Only an error or a response with no usable text triggers one additional legacy free-text model call, which can add model cost. Set `structured-output: off` only when you want to skip metadata lookup and always use the existing free-text request.
+`auto` is the default and checks OpenRouter's public model metadata once per model per process. When the lookup fails or the model does not advertise Structured Outputs support, Repo Guard immediately uses the existing free-text request. Set `structured-output: off` only when you want to skip metadata lookup and always use that existing path; non-OpenRouter endpoints and the Anthropic provider are unchanged in either case.
+
+The strict schema covers the machine-stable skeleton—risk, recommendation, scores, next action, and inline locations—while complete cascade analysis, finding evidence and fixes, Karpathy review, and Issue rubric details remain full text blocks. Repo Guard publishes the same Markdown sections as before and still accepts V1 deep-schema JSON, tolerant JSON, Markdown, and free text. Structured requests omit `temperature` for OpenRouter parameter compatibility; legacy requests retain `temperature: 0.3`.
+
+Any non-empty first response is kept even if it does not match the schema, so formatting imperfections do not cause another model charge. Only a structured-request error or a response with no usable text triggers one additional legacy free-text call. If that call also returns no usable text, the Action fails explicitly instead of publishing a synthetic medium-risk review, and no third model call is made.
 
 ### Private intranet models
 

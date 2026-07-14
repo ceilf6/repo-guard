@@ -23,7 +23,7 @@ OpenRouter 支持 `response_format.type=json_schema`、`strict=true` 和 `provid
 
 ## 目标
 
-1. 默认自动探测 OpenRouter Structured Outputs，使 PR 与 Issue 输出在模型侧尽量匹配完整 JSON Schema。
+1. 默认自动探测 OpenRouter Structured Outputs，使 PR 与 Issue 输出在模型侧尽量匹配紧凑、稳定的 JSON Schema。
 2. 仅在显式配置 `off` 时关闭新能力；非 OpenRouter、Anthropic 和其他中转服务仍保持原有行为。
 3. Structured Outputs 不可用时自动使用现有自由文本路径。
 4. 第一次结构化调用只要返回非空模型文本，就保留该信息，不因 schema 不合规而重复调用。
@@ -43,7 +43,7 @@ OpenRouter 支持 `response_format.type=json_schema`、`strict=true` 和 `provid
 
 ## 方案选择
 
-采用“能力探测 + 严格 schema + 内容感知降级”。
+采用“能力探测 + 严格机器骨架 + 完整内容块 + 内容感知降级”。
 
 未采用的方案：
 
@@ -108,7 +108,8 @@ structured-output: off|auto
 - PR JSON Schema
 - Issue JSON Schema
 - OpenRouter `response_format` 包装
-- 完整结构化对象到现有中文 Markdown 契约的确定性渲染
+- V2 紧凑结构化对象到现有完整中文 Markdown 契约的确定性渲染
+- V1 深层结构化对象的兼容识别与渲染
 
 `review-logic.mjs` 继续作为所有字符串输出的统一归一化入口，并复用评审契约模块处理已识别的结构化对象。未知 JSON、自由文本和 JSON-like 安全外壳继续保留现有行为。
 
@@ -128,13 +129,13 @@ structured-output: off|auto
 
 ## JSON Schema
 
-所有 schema 均满足：
+V2 schema 只把机器稳定消费的字段和行级位置拆成独立属性，把完整评审维度保存在自由文本内容块中。所有 schema object 均满足：
 
 - 顶层类型为 object。
 - `strict=true`。
 - 每层 object 都设置 `additionalProperties=false`。
 - 所有字段明确列入 `required`。
-- 没有语义值时使用 `null`、空字符串或空数组，而不是省略字段。
+- 没有行级位置时使用 `null`；没有 findings 或 missing coverage 时使用空数组，而不是省略字段。
 - 机器枚举使用稳定英文值；本地渲染器转换为当前中文标签。
 - 自然语言字段遵循现有 prompt 的语言要求。
 
@@ -150,27 +151,20 @@ structured-output: off|auto
 - `karpathy_review`
 - `missing_coverage`
 
-`cascade_analysis` 包含：
-
-- `changed_symbols`: string[]
-- `affected_flows`: string[]
-- `outside_changeset_callers`: string
-- `confidence`: `high | medium | degraded`
+`cascade_analysis` 是完整文本块，必须覆盖变更符号、受影响流程、变更集外调用方和置信度。Schema 不再要求模型把这些写作维度拆成深层属性。
 
 每个 finding 包含：
 
 - `severity`: `LOW | MEDIUM | HIGH | CRITICAL`
 - `title`: string
-- `evidence`: string
-- `affected_flows`: string
-- `smallest_viable_fix`: string
+- `details`: string，完整覆盖证据、受影响流程和最小可行修复
 - `path`: string | null
 - `line`: integer | null
 - `inline_comment`: string | null
 
 `path` 与 `line` 只是候选位置。现有 `extractInlineComments` 负责确认文件存在；GitHub Review API 负责接受或拒绝候选行号，失败后现有发布逻辑会降级为普通评论。Schema 合法不代表可以绕过这两层现有边界。
 
-`karpathy_review` 包含 assumptions、simplicity、surgical scope 和 verification 四个文本字段。`missing_coverage` 为字符串数组。
+`karpathy_review` 是完整文本块，必须覆盖 assumptions、simplicity、surgical scope 和 verification。`missing_coverage` 为字符串数组。
 
 ### Issue schema
 
@@ -186,7 +180,9 @@ structured-output: off|auto
 - `suggestions`: string[]
 - `summary`: string
 
-三个评估对象完整覆盖现有 Markdown 契约里的问题陈述、复现步骤、预期与实际、环境信息、支撑证据、标题质量、单一关注点、表达精确度、范围、是否可开始、验收标准和依赖。各字段使用与当前契约一一对应的英文枚举，本地映射为中文展示值。
+`completeness`、`clarity` 和 `actionability` 都是完整文本块，仍分别覆盖现有 Markdown 契约里的问题陈述、复现步骤、预期与实际、环境信息、支撑证据、标题质量、单一关注点、表达精确度、范围、是否可开始、验收标准和依赖。Schema 不再把每个写作维度拆成深层 required 属性。
+
+V1 深层 schema 对象继续由旧渲染器识别。V2、V1、现有 tolerant JSON、Markdown 和自由文本最终都进入同一归一化与发布流程。
 
 ## Prompt 处理
 
@@ -211,10 +207,11 @@ structured-output: off|auto
    - `response_format`，类型为 `json_schema`
    - `json_schema.strict=true`
    - `provider.require_parameters=true`
+   - 不发送 `temperature`，避免 OpenRouter 在严格参数路由时因目标模型未声明支持而拒绝请求
 7. 读取 `choices[0].message.content`。
 8. 如果得到可用文本，立即返回，不做第二次模型调用。
 9. 如果没有得到可用文本，记录降级原因，并发送一次不含结构化参数、使用原始 prompt 的自由文本请求。
-10. 返回第二次调用的文本；若第二次也失败，抛出错误。
+10. 第二次调用返回非空文本时返回；若第二次抛错或同样没有可用文本，抛出明确错误，不生成占位评审，也不进行第三次调用。
 11. 上层继续执行 thinking block 清理、归一化、行级评论提取、质量评分或 GitHub 发布。
 
 ## 可用文本与降级语义
@@ -239,7 +236,7 @@ structured-output: off|auto
 
 现有 `fetchWithRetry` 行为不变：网络异常与 5xx 在一次逻辑调用内部最多重试两次，普通 4xx 立即抛错。结构化逻辑调用在这些内部重试耗尽后，才执行一次自由文本降级。自由文本降级本身仍受相同的 `fetchWithRetry` 保护。
 
-若降级也失败，抛出降级错误，并通过 error cause 保留第一次结构化失败信息，便于排障。
+若降级也失败或返回空 content，抛出明确错误，并通过 error cause 保留第一次结构化失败信息，便于排障。不得用默认“风险中 / 建议评论”内容伪装成有效模型评审。
 
 ## 日志与安全
 
@@ -250,6 +247,8 @@ structured-output: off|auto
 - `structured output: enabled`
 - `structured output returned usable text, normalizing without retry`
 - `structured output produced no usable text, falling back once`
+
+空响应日志可以记录 `finish_reason` 以及 prompt、completion、reasoning token count（字段存在时）。HTTP 错误日志只记录安全状态标签，例如状态码或错误类型，不记录响应正文。
 
 日志不得输出：
 
@@ -264,7 +263,7 @@ structured-output: off|auto
 
 必须满足：
 
-- 未配置新 input 或环境变量时等价于 `off`。
+- 未配置新 input 或环境变量时默认 `auto`；只有显式配置 `off` 才完全使用旧自由文本路径。
 - `off` 时不发模型元数据请求。
 - `off` 时 OpenAI 与 Anthropic 请求 body 保持现有字段和 prompt。
 - `auto` 配合非 OpenRouter base URL 时不发元数据请求，也不添加 OpenRouter 参数。
@@ -297,17 +296,20 @@ structured-output: off|auto
 - `off` 的请求体与现有 OpenAI、Anthropic 请求一致。
 - 不支持 schema 时只发送一次旧请求。
 - 支持时请求包含严格 schema 和 `provider.require_parameters=true`。
+- 结构化请求不含 `temperature`；Legacy 请求仍含 `temperature: 0.3`。
 - 结构化 prompt 包含 JSON 覆盖指令，自由文本 prompt 不包含。
 - 第一次返回 schema JSON 时不降级。
 - 第一次返回非空 Markdown、普通文本或 malformed JSON-like 内容时不降级。
 - 第一次抛错、缺少 content 或返回空白时恰好降级一次。
 - 降级请求彻底移除 `response_format`、`provider` 路由参数和临时 JSON 指令。
-- 第二次失败时向上抛错并保留第一次失败 cause。
+- 第二次失败或返回空 content 时向上抛错并保留第一次失败 cause，不生成占位报告，不进行第三次调用。
+- 空响应诊断包含可用的 finish/token 元数据，但不包含 prompt、diff、content、reasoning 正文或 HTTP body。
 
 ### 契约与归一化测试
 
-- 完整 PR JSON 映射到当前所有 Markdown 字段与章节。
-- 完整 Issue JSON 映射到当前所有 Markdown 字段与章节。
+- V2 PR 内容块覆盖当前所有评审维度，并映射到当前所有 Markdown 字段与章节。
+- V2 Issue 内容块覆盖当前所有 rubric 维度，并映射到当前所有 Markdown 字段与章节。
+- V1 深层 PR/Issue JSON 继续映射到原 Markdown 契约。
 - 枚举稳定映射为中文标签。
 - null 行号不会产生 inline comment。
 - schema 中存在 path/line 仍必须经过现有文件路径过滤和 GitHub Review API 行号校验。
@@ -343,10 +345,10 @@ structured-output: off|auto
 
 1. 未设置新配置时默认进入 `auto`；非 OpenRouter 和 Anthropic 的请求行为保持不变。
 2. 当前 OpenRouter 配置在 `auto` 下识别 `openai/gpt-5.5` 的 structured output 能力。
-3. 支持模型的 PR 与 Issue 请求携带严格且完整的各自 schema。
-4. 完整结构化响应能无信息缩水地渲染为现有 Markdown 契约。
+3. 支持模型的 PR 与 Issue 请求携带严格且紧凑的各自 V2 schema，Structured 请求不携带 `temperature`。
+4. V2 内容块完整覆盖现有评审维度并无信息缩水地渲染为原 Markdown 章节；V1 深层对象继续兼容。
 5. 任意非空首次模型文本都不会产生第二次调用。
-6. 首次没有可用文本时只追加一次旧版自由文本调用。
+6. 首次没有可用文本时只追加一次旧版自由文本调用；第二次也为空时明确失败且不产生第三次调用。
 7. 非 OpenRouter、Anthropic 和显式 `off` 路径不接收 OpenRouter 专用参数。
 8. PR、Issue、dispatcher 和质量评估全部覆盖。
 9. 自动化测试不产生真实 LLM 调用或费用。
