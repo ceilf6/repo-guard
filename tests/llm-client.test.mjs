@@ -67,6 +67,7 @@ test('off mode sends the legacy OpenAI request without probing', async () => {
   assert.equal('response_format' in calls[0].body, false);
   assert.equal('provider' in calls[0].body, false);
   assert.equal(calls[0].body.messages[0].content, 'system prompt');
+  assert.equal(calls[0].body.temperature, 0.3);
 });
 
 test('auto mode keeps non-OpenRouter OpenAI-compatible requests unchanged', async () => {
@@ -103,6 +104,7 @@ test('supported OpenRouter model sends strict response format and routing requir
   assert.equal(calls[0].url, 'https://openrouter.ai/api/v1/model/openai/gpt-5.5');
   assert.deepEqual(calls[1].body.response_format, PR_REVIEW_RESPONSE_FORMAT);
   assert.deepEqual(calls[1].body.provider, { require_parameters: true });
+  assert.equal('temperature' in calls[1].body, false);
   assert.match(calls[1].body.messages[0].content, /本次响应必须遵守请求携带的 JSON Schema/);
 });
 
@@ -162,6 +164,8 @@ test('structured request error falls back once with the original request', async
   assert.equal('response_format' in modelBodies[1], false);
   assert.equal('provider' in modelBodies[1], false);
   assert.equal(modelBodies[1].messages[0].content, 'system prompt');
+  assert.equal('temperature' in modelBodies[0], false);
+  assert.equal(modelBodies[1].temperature, 0.3);
 });
 
 test('missing or blank structured content falls back once', async () => {
@@ -185,7 +189,7 @@ test('missing or blank structured content falls back once', async () => {
   }
 });
 
-test('fallback failure preserves the structured error as cause', async () => {
+test('fallback failure preserves statuses without leaking provider response bodies', async () => {
   let modelCalls = 0;
   global.fetch = async (url) => {
     if (String(url).includes('/model/')) {
@@ -193,8 +197,8 @@ test('fallback failure preserves the structured error as cause', async () => {
     }
     modelCalls += 1;
     return modelCalls === 1
-      ? jsonResponse({ error: { message: 'schema rejected' } }, 400)
-      : jsonResponse({ error: { message: 'legacy rejected' } }, 401);
+      ? jsonResponse({ error: { message: 'sentinel-structured-response-body' } }, 400)
+      : jsonResponse({ error: { message: 'sentinel-legacy-response-body' } }, 401);
   };
 
   await assert.rejects(
@@ -202,9 +206,108 @@ test('fallback failure preserves the structured error as cause', async () => {
     (error) => {
       assert.match(error.message, /HTTP 401/);
       assert.match(error.cause.message, /HTTP 400/);
+      assert.doesNotMatch(error.message, /sentinel-legacy-response-body/);
+      assert.doesNotMatch(error.cause.message, /sentinel-structured-response-body/);
       return true;
     },
   );
+});
+
+test('structured and legacy empty content fails without a third model call', async () => {
+  let modelCalls = 0;
+  global.fetch = async (url) => {
+    if (String(url).includes('/model/')) {
+      return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+    }
+    modelCalls += 1;
+    return jsonResponse({
+      choices: [{
+        message: { content: modelCalls === 1 ? '' : '   ' },
+        finish_reason: modelCalls === 1 ? 'length' : 'stop',
+      }],
+      usage: {
+        prompt_tokens: 100,
+        completion_tokens: 4096,
+        completion_tokens_details: { reasoning_tokens: 4096 },
+      },
+    });
+  };
+
+  await assert.rejects(
+    chatCompletion(baseCompletionConfig()),
+    /No usable model content after structured and legacy attempts/,
+  );
+  assert.equal(modelCalls, 2);
+});
+
+test('structured failures log only safe response diagnostics', async () => {
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...values) => warnings.push(values.join(' '));
+  let modelCalls = 0;
+  try {
+    global.fetch = async (url) => {
+      if (String(url).includes('/model/')) {
+        return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+      }
+      modelCalls += 1;
+      if (modelCalls === 1) {
+        return jsonResponse({ error: { message: 'schema rejected sentinel-response-content' } }, 400);
+      }
+      return jsonResponse({ choices: [{ message: { content: 'legacy fallback' } }] });
+    };
+
+    assert.equal(await chatCompletion(baseCompletionConfig({
+      apiKey: 'sentinel-api-key',
+      system: 'sentinel-prompt',
+    })), 'legacy fallback');
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.match(warnings.join('\n'), /structured output failed: HTTP 400/);
+  assert.doesNotMatch(warnings.join('\n'), /sentinel-api-key|sentinel-prompt|sentinel-response-content/);
+});
+
+test('empty responses log finish and token metadata without model text', async () => {
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...values) => warnings.push(values.join(' '));
+  let modelCalls = 0;
+  try {
+    global.fetch = async (url) => {
+      if (String(url).includes('/model/')) {
+        return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+      }
+      modelCalls += 1;
+      return jsonResponse({
+        choices: [{
+          message: {
+            content: '',
+            reasoning: 'sentinel-reasoning-body',
+          },
+          finish_reason: modelCalls === 1 ? 'length' : 'stop',
+        }],
+        usage: {
+          prompt_tokens: 120,
+          completion_tokens: 4096,
+          completion_tokens_details: { reasoning_tokens: 4096 },
+        },
+      });
+    };
+
+    await assert.rejects(chatCompletion(baseCompletionConfig()), /No usable model content/);
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  const output = warnings.join('\n');
+  assert.match(output, /structured output empty: finish_reason=length/);
+  assert.match(output, /legacy output empty: finish_reason=stop/);
+  assert.match(output, /prompt_tokens=120/);
+  assert.match(output, /completion_tokens=4096/);
+  assert.match(output, /reasoning_tokens=4096/);
+  assert.doesNotMatch(output, /sentinel-reasoning-body/);
 });
 
 test('anthropic auto mode keeps the native message request unchanged', async () => {

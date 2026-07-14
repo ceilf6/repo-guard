@@ -38,13 +38,13 @@ async function fetchWithRetry(url, options, retries = 2) {
     try {
       const res = await fetch(url, options);
       if (res.ok) return res;
-      const body = await res.text();
+      await res.text();
       if (res.status >= 500 && attempt < retries) {
-        lastError = new Error(`HTTP ${res.status}: ${body}`);
+        lastError = httpError(res.status);
         await sleep(1000 * 2 ** attempt);
         continue;
       }
-      throw new Error(`HTTP ${res.status}: ${body}`);
+      throw httpError(res.status);
     } catch (err) {
       if (err.message?.startsWith('HTTP')) throw err;
       if (attempt < retries) {
@@ -62,16 +62,23 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildOpenAIRequest(model, messages, system, maxTokens) {
+function httpError(status) {
+  const error = new Error(`HTTP ${status}`);
+  error.status = status;
+  return error;
+}
+
+function buildOpenAIRequest(model, messages, system, maxTokens, { temperature = true } = {}) {
   const msgs = [];
   if (system) msgs.push({ role: 'system', content: system });
   msgs.push(...messages);
-  return {
+  const body = {
     model,
     messages: msgs,
     max_tokens: maxTokens,
-    temperature: 0.3,
   };
+  if (temperature) body.temperature = 0.3;
+  return body;
 }
 
 function buildAnthropicRequest(model, messages, system, maxTokens) {
@@ -97,9 +104,33 @@ async function requestOpenAI({ url, apiKey, body }) {
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  return typeof data.choices?.[0]?.message?.content === 'string'
-    ? data.choices[0].message.content
-    : '';
+  const choice = data.choices?.[0];
+  return {
+    content: typeof choice?.message?.content === 'string' ? choice.message.content : '',
+    finishReason: choice?.finish_reason || '',
+    usage: {
+      promptTokens: data.usage?.prompt_tokens,
+      completionTokens: data.usage?.completion_tokens,
+      reasoningTokens: data.usage?.completion_tokens_details?.reasoning_tokens,
+    },
+  };
+}
+
+function responseDiagnostics(response) {
+  const fields = [`finish_reason=${response.finishReason || 'unknown'}`];
+  for (const [label, value] of [
+    ['prompt_tokens', response.usage.promptTokens],
+    ['completion_tokens', response.usage.completionTokens],
+    ['reasoning_tokens', response.usage.reasoningTokens],
+  ]) {
+    if (Number.isFinite(value)) fields.push(`${label}=${value}`);
+  }
+  return fields.join(', ');
+}
+
+function safeErrorLabel(error) {
+  if (Number.isInteger(error?.status)) return `HTTP ${error.status}`;
+  return error?.name || 'Error';
 }
 
 export async function chatCompletion({
@@ -145,7 +176,8 @@ export async function chatCompletion({
     console.log(structuredOutputMode === 'off'
       ? 'structured output: off'
       : 'structured output: unsupported, using legacy');
-    return requestOpenAI({ url, apiKey, body: legacyBody });
+    const result = await requestOpenAI({ url, apiKey, body: legacyBody });
+    return result.content;
   }
 
   console.log('structured output: enabled');
@@ -155,6 +187,7 @@ export async function chatCompletion({
       messages,
       system ? `${system}${STRUCTURED_OUTPUT_INSTRUCTION}` : STRUCTURED_OUTPUT_INSTRUCTION.trimStart(),
       maxTokens,
+      { temperature: false },
     ),
     response_format: responseFormat,
     provider: { require_parameters: true },
@@ -162,18 +195,26 @@ export async function chatCompletion({
 
   let structuredError;
   try {
-    const content = await requestOpenAI({ url, apiKey, body: structuredBody });
-    if (hasUsableText(content)) {
+    const result = await requestOpenAI({ url, apiKey, body: structuredBody });
+    if (hasUsableText(result.content)) {
       console.log('structured output returned usable text, normalizing without retry');
-      return content;
+      return result.content;
     }
+    console.warn(`structured output empty: ${responseDiagnostics(result)}`);
+    structuredError = new Error('Structured request returned no usable model content');
   } catch (error) {
     structuredError = error;
+    console.warn(`structured output failed: ${safeErrorLabel(error)}`);
   }
 
   console.warn('structured output produced no usable text, falling back once');
   try {
-    return await requestOpenAI({ url, apiKey, body: legacyBody });
+    const result = await requestOpenAI({ url, apiKey, body: legacyBody });
+    if (hasUsableText(result.content)) return result.content;
+    console.warn(`legacy output empty: ${responseDiagnostics(result)}`);
+    const error = new Error('No usable model content after structured and legacy attempts');
+    if (structuredError) error.cause = structuredError;
+    throw error;
   } catch (fallbackError) {
     if (structuredError && fallbackError.cause === undefined) fallbackError.cause = structuredError;
     throw fallbackError;
