@@ -94,6 +94,14 @@ function hasUsableText(value) {
   return typeof value === 'string' && value.trim() !== '';
 }
 
+async function parseJsonResponse(response, providerLabel) {
+  try {
+    return await response.json();
+  } catch {
+    throw new Error(`${providerLabel} provider returned invalid JSON`);
+  }
+}
+
 async function requestOpenAI({ url, apiKey, body }) {
   const res = await fetchWithRetry(url, {
     method: 'POST',
@@ -103,7 +111,7 @@ async function requestOpenAI({ url, apiKey, body }) {
     },
     body: JSON.stringify(body),
   });
-  const data = await res.json();
+  const data = await parseJsonResponse(res, 'OpenAI-compatible');
   const choice = data.choices?.[0];
   return {
     content: typeof choice?.message?.content === 'string' ? choice.message.content : '',
@@ -122,6 +130,7 @@ function responseDiagnostics(response) {
     ['prompt_tokens', response.usage.promptTokens],
     ['completion_tokens', response.usage.completionTokens],
     ['reasoning_tokens', response.usage.reasoningTokens],
+    ['content_chars', response.content.length],
   ]) {
     if (Number.isFinite(value)) fields.push(`${label}=${value}`);
   }
@@ -157,7 +166,7 @@ export async function chatCompletion({
       },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const data = await parseJsonResponse(res, 'Anthropic');
     return data.content?.[0]?.text || '';
   }
 
@@ -176,7 +185,12 @@ export async function chatCompletion({
       ? 'structured output: off'
       : 'structured output: unsupported, using legacy');
     const result = await requestOpenAI({ url, apiKey, body: legacyBody });
-    return result.content;
+    if (hasUsableText(result.content)) {
+      console.log(`legacy output returned usable text: ${responseDiagnostics(result)}`);
+      return result.content;
+    }
+    console.warn(`legacy output empty: ${responseDiagnostics(result)}`);
+    throw new Error('No usable model content');
   }
 
   console.log('structured output: enabled');
@@ -195,7 +209,7 @@ export async function chatCompletion({
   try {
     const result = await requestOpenAI({ url, apiKey, body: structuredBody });
     if (hasUsableText(result.content)) {
-      console.log('structured output returned usable text, normalizing without retry');
+      console.log(`structured output returned usable text, normalizing without retry: ${responseDiagnostics(result)}`);
       return result.content;
     }
     console.warn(`structured output empty: ${responseDiagnostics(result)}`);
@@ -208,7 +222,10 @@ export async function chatCompletion({
   console.warn('structured output produced no usable text, falling back once');
   try {
     const result = await requestOpenAI({ url, apiKey, body: legacyBody });
-    if (hasUsableText(result.content)) return result.content;
+    if (hasUsableText(result.content)) {
+      console.log(`legacy output returned usable text: ${responseDiagnostics(result)}`);
+      return result.content;
+    }
     console.warn(`legacy output empty: ${responseDiagnostics(result)}`);
     const error = new Error('No usable model content after structured and legacy attempts');
     if (structuredError) error.cause = structuredError;

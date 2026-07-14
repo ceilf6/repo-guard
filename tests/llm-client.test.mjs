@@ -152,6 +152,69 @@ test('non-empty structured response is used without a fallback even when it is n
   }
 });
 
+test('non-empty length response is returned once with safe diagnostics', async () => {
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...values) => logs.push(values.join(' '));
+  let modelCalls = 0;
+  try {
+    global.fetch = async (url) => {
+      if (String(url).includes('/model/')) {
+        return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+      }
+      modelCalls += 1;
+      return jsonResponse({
+        choices: [{ message: { content: '{"decision_summary":"sentinel-model-body"' }, finish_reason: 'length' }],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 4096,
+          completion_tokens_details: { reasoning_tokens: 2048 },
+        },
+      });
+    };
+
+    assert.equal(
+      await chatCompletion(baseCompletionConfig()),
+      '{"decision_summary":"sentinel-model-body"',
+    );
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.equal(modelCalls, 1);
+  const output = logs.join('\n');
+  assert.match(output, /finish_reason=length/);
+  assert.match(output, /completion_tokens=4096/);
+  assert.match(output, /reasoning_tokens=2048/);
+  assert.match(output, /content_chars=41/);
+  assert.doesNotMatch(output, /sentinel-model-body/);
+});
+
+test('off mode rejects empty content once with safe diagnostics', async () => {
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...values) => warnings.push(values.join(' '));
+  let modelCalls = 0;
+  try {
+    global.fetch = async () => {
+      modelCalls += 1;
+      return jsonResponse({
+        choices: [{ message: { content: '' }, finish_reason: 'stop' }],
+      });
+    };
+
+    await assert.rejects(
+      chatCompletion(baseCompletionConfig({ structuredOutputMode: 'off' })),
+      /No usable model content/,
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal(modelCalls, 1);
+  assert.match(warnings.join('\n'), /legacy output empty: finish_reason=stop, content_chars=0/);
+});
+
 test('structured request error falls back once with the original request', async () => {
   const modelBodies = [];
   global.fetch = async (url, options = {}) => {
@@ -220,6 +283,47 @@ test('fallback failure preserves statuses without leaking provider response bodi
       return true;
     },
   );
+});
+
+test('direct legacy invalid JSON response is sanitized', async () => {
+  global.fetch = async () => new Response('sentinel-direct-provider-body', { status: 200 });
+
+  await assert.rejects(
+    chatCompletion(baseCompletionConfig({ structuredOutputMode: 'off' })),
+    (error) => {
+      assert.match(error.message, /OpenAI-compatible provider returned invalid JSON/);
+      assert.doesNotMatch(error.message, /sentinel-direct-provider-body|sentinel-direct/);
+      return true;
+    },
+  );
+});
+
+test('structured and fallback invalid JSON responses are sanitized', async () => {
+  let modelCalls = 0;
+  global.fetch = async (url) => {
+    if (String(url).includes('/model/')) {
+      return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+    }
+    modelCalls += 1;
+    return new Response(
+      modelCalls === 1 ? 'sentinel-structured-provider-body' : 'sentinel-legacy-provider-body',
+      { status: 200 },
+    );
+  };
+
+  await assert.rejects(
+    chatCompletion(baseCompletionConfig()),
+    (error) => {
+      assert.match(error.message, /OpenAI-compatible provider returned invalid JSON/);
+      assert.match(error.cause.message, /OpenAI-compatible provider returned invalid JSON/);
+      assert.doesNotMatch(
+        `${error.message}\n${error.cause.message}`,
+        /sentinel-structured|sentinel-legacy|provider-body/,
+      );
+      return true;
+    },
+  );
+  assert.equal(modelCalls, 2);
 });
 
 test('structured and legacy empty content fails without a third model call', async () => {
@@ -338,4 +442,21 @@ test('anthropic auto mode keeps the native message request unchanged', async () 
   assert.equal('response_format' in calls[0].body, false);
   assert.equal('provider' in calls[0].body, false);
   assert.equal(calls[0].body.max_tokens, 16384);
+});
+
+test('anthropic invalid JSON response is sanitized', async () => {
+  global.fetch = async () => new Response('sentinel-anthropic-provider-body', { status: 200 });
+
+  await assert.rejects(
+    chatCompletion(baseCompletionConfig({
+      provider: 'anthropic',
+      model: 'claude-test',
+      baseURL: 'https://api.anthropic.com/v1',
+    })),
+    (error) => {
+      assert.match(error.message, /Anthropic provider returned invalid JSON/);
+      assert.doesNotMatch(error.message, /sentinel-anthropic|provider-body/);
+      return true;
+    },
+  );
 });
