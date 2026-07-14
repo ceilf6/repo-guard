@@ -1,4 +1,13 @@
 // @ts-check
+import { supportsOpenRouterStructuredOutputs } from './openrouter-structured-output.mjs';
+
+const STRUCTURED_OUTPUT_INSTRUCTION = [
+  '',
+  '## 本次响应序列化要求',
+  '本次响应必须遵守请求携带的 JSON Schema。',
+  'Schema 字段承载原 Markdown 输出契约的同等语义。',
+  '不要输出 Markdown fence、额外解释或 schema 外字段。',
+].join('\n');
 
 /**
  * Normalize provider base URL to the correct API root.
@@ -74,7 +83,36 @@ function buildAnthropicRequest(model, messages, system, maxTokens) {
   };
 }
 
-export async function chatCompletion({ provider, model, apiKey, baseURL, maxTokens, messages, system }) {
+function hasUsableText(value) {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+async function requestOpenAI({ url, apiKey, body }) {
+  const res = await fetchWithRetry(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  return typeof data.choices?.[0]?.message?.content === 'string'
+    ? data.choices[0].message.content
+    : '';
+}
+
+export async function chatCompletion({
+  provider,
+  model,
+  apiKey,
+  baseURL,
+  maxTokens,
+  messages,
+  system,
+  structuredOutputMode = 'off',
+  responseFormat,
+}) {
   const base = normalizeBaseURL(provider, baseURL);
 
   if (provider === 'anthropic') {
@@ -95,15 +133,49 @@ export async function chatCompletion({ provider, model, apiKey, baseURL, maxToke
 
   // OpenAI-compatible
   const url = `${base}/chat/completions`;
-  const body = buildOpenAIRequest(model, messages, system, maxTokens);
-  const res = await fetchWithRetry(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(body),
+  const legacyBody = buildOpenAIRequest(model, messages, system, maxTokens);
+  const structuredSupported = responseFormat && await supportsOpenRouterStructuredOutputs({
+    mode: structuredOutputMode,
+    provider,
+    baseURL: base,
+    model,
   });
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+
+  if (!structuredSupported) {
+    console.log(structuredOutputMode === 'off'
+      ? 'structured output: off'
+      : 'structured output: unsupported, using legacy');
+    return requestOpenAI({ url, apiKey, body: legacyBody });
+  }
+
+  console.log('structured output: enabled');
+  const structuredBody = {
+    ...buildOpenAIRequest(
+      model,
+      messages,
+      system ? `${system}${STRUCTURED_OUTPUT_INSTRUCTION}` : STRUCTURED_OUTPUT_INSTRUCTION.trimStart(),
+      maxTokens,
+    ),
+    response_format: responseFormat,
+    provider: { require_parameters: true },
+  };
+
+  let structuredError;
+  try {
+    const content = await requestOpenAI({ url, apiKey, body: structuredBody });
+    if (hasUsableText(content)) {
+      console.log('structured output returned usable text, normalizing without retry');
+      return content;
+    }
+  } catch (error) {
+    structuredError = error;
+  }
+
+  console.warn('structured output produced no usable text, falling back once');
+  try {
+    return await requestOpenAI({ url, apiKey, body: legacyBody });
+  } catch (fallbackError) {
+    if (structuredError && fallbackError.cause === undefined) fallbackError.cause = structuredError;
+    throw fallbackError;
+  }
 }
