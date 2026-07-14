@@ -1,4 +1,10 @@
 // @ts-check
+import {
+  isCanonicalIssueReview,
+  isCanonicalPRReview,
+  renderCanonicalIssueReview,
+  renderCanonicalPRReview,
+} from './review-contracts.mjs';
 
 const TRIGGER_PATTERNS = [/@ceilf6\/repo-guard/i, /\/review/i];
 
@@ -86,6 +92,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
   const jsonLike = looksLikeStandaloneJson(trimmed);
   if (context.type === 'pr') {
     if (isValidPRMarkdownContract(trimmed)) return trimmed;
+    if (parsed && isCanonicalPRReview(parsed)) return renderCanonicalPRReview(parsed, context.title);
     if (parsed && looksLikeStructuredPRReview(parsed)) return formatStructuredPRReview(parsed, context.title);
     if (parsed) return formatUnknownJsonPRReview(parsed, context.title);
     if (jsonLike) return formatInvalidJsonPRReview(context.title);
@@ -94,6 +101,7 @@ export function normalizeReviewResponse(response = '', context = {}) {
 
   if (context.type === 'issue') {
     if (isValidIssueMarkdownContract(trimmed)) return trimmed;
+    if (parsed && isCanonicalIssueReview(parsed)) return renderCanonicalIssueReview(parsed, context.title);
     if (parsed && looksLikeStructuredIssueReview(parsed)) return formatStructuredIssueReview(parsed, context.title);
     if (parsed) return formatUnknownJsonIssueReview(parsed, context.title);
     if (jsonLike) return formatInvalidJsonIssueReview(context.title);

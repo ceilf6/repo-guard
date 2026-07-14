@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  extractInlineComments,
   extractRecommendation,
   extractUserPrompt,
   getReviewNumber,
@@ -11,6 +12,122 @@ import {
   resolveReviewType,
   stripThinkingBlocks,
 } from '../scripts/review-logic.mjs';
+
+test('normalizeReviewResponse preserves every canonical PR field', () => {
+  const response = JSON.stringify({
+    risk_level: 'HIGH',
+    recommendation: 'REQUEST_CHANGES',
+    decision_summary: 'Authentication can be bypassed.',
+    cascade_analysis: {
+      changed_symbols: ['authorize'],
+      affected_flows: ['protected routes'],
+      outside_changeset_callers: 'unknown',
+      confidence: 'degraded',
+    },
+    findings: [{
+      severity: 'HIGH',
+      title: 'Missing token bypasses authentication',
+      evidence: 'src/auth.js:12 calls next()',
+      affected_flows: 'protected routes',
+      smallest_viable_fix: 'Return 401 before next().',
+      path: 'src/auth.js',
+      line: 12,
+      inline_comment: 'Reject missing tokens before calling next().',
+    }, {
+      severity: 'MEDIUM',
+      title: 'Unscoped finding',
+      evidence: 'Configuration behavior',
+      affected_flows: 'deployment',
+      smallest_viable_fix: 'Document the constraint.',
+      path: 'src/missing.js',
+      line: 3,
+      inline_comment: 'This path is absent from the supplied diff.',
+    }],
+    karpathy_review: {
+      assumptions: 'No anonymous route uses this middleware.',
+      simplicity: 'A local guard is sufficient.',
+      surgical_scope: 'Only auth behavior changes.',
+      verification: 'Missing rejection-path test.',
+    },
+    missing_coverage: ['Add a missing-token integration test.'],
+  });
+
+  const normalized = normalizeReviewResponse(response, { type: 'pr', title: 'Harden auth' });
+
+  assert.match(normalized, /- 变更符号: authorize/);
+  assert.match(normalized, /- 假设: No anonymous route uses this middleware\./);
+  assert.match(normalized, /- Add a missing-token integration test\./);
+  assert.equal(extractRecommendation(normalized), 'REQUEST_CHANGES');
+  assert.deepEqual(extractInlineComments(normalized, [{ filename: 'src/auth.js' }]), [{
+    path: 'src/auth.js',
+    line: 12,
+    body: 'Reject missing tokens before calling next().',
+  }]);
+});
+
+test('normalizeReviewResponse preserves canonical Issue rubric values', () => {
+  const response = JSON.stringify({
+    quality_score: 2,
+    priority_suggestion: 'P1_HIGH',
+    issue_type: 'BUG_REPORT',
+    maintainer_next_action: 'ASK_REPORTER',
+    completeness: {
+      problem_statement: 'CLEAR',
+      reproduction_steps: 'MISSING',
+      expected_vs_actual: 'MISSING',
+      environment_info: 'MISSING',
+      supporting_evidence: 'MISSING',
+    },
+    clarity: {
+      title_quality: 'DESCRIPTIVE',
+      single_concern: 'YES',
+      language_precision: 'SOMEWHAT_VAGUE',
+      scope: 'WELL_DEFINED',
+    },
+    actionability: {
+      ready_to_start: 'NEEDS_CLARIFICATION',
+      acceptance_criteria: 'MISSING',
+      dependencies: 'UNKNOWN',
+    },
+    suggestions: ['请补充稳定复现步骤。'],
+    summary: '问题明确，但当前信息不足以开始修复。',
+  });
+
+  const normalized = normalizeReviewResponse(response, { type: 'issue', title: '登录后 500' });
+
+  assert.match(normalized, /- 问题陈述: 清楚/);
+  assert.match(normalized, /- 复现步骤: 缺失/);
+  assert.match(normalized, /- 是否可开始: 需要澄清/);
+  assert.match(normalized, /- 请补充稳定复现步骤。/);
+});
+
+test('normalizeReviewResponse tolerates non-empty partial contract JSON', () => {
+  const partialPR = JSON.stringify({
+    decision_summary: 'Partial but usable review.',
+    cascade_analysis: {},
+    findings: [],
+    karpathy_review: {},
+    missing_coverage: [],
+  });
+  const partialIssue = JSON.stringify({
+    quality_score: 2,
+    maintainer_next_action: 'ASK_REPORTER',
+    completeness: null,
+    clarity: {},
+    actionability: {},
+    suggestions: [],
+    summary: 'Partial but usable issue review.',
+  });
+
+  assert.match(
+    normalizeReviewResponse(partialPR, { type: 'pr', title: 'Partial PR' }),
+    /^## 代码评审报告: Partial PR/,
+  );
+  assert.match(
+    normalizeReviewResponse(partialIssue, { type: 'issue', title: 'Partial Issue' }),
+    /Partial but usable issue review\./,
+  );
+});
 
 test('issue_comment on a pull request resolves to PR review and uses issue number', () => {
   const config = {
