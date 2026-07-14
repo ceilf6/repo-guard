@@ -41,6 +41,7 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
           LLM_MAX_TOKENS: ${{ vars.LLM_MAX_TOKENS || '4096' }}
+          LLM_STRUCTURED_OUTPUT: ${{ vars.LLM_STRUCTURED_OUTPUT || 'off' }}
           EXTERNAL_REPO_GUARD_TRIGGER_ACTOR: ceilf6
           EXTERNAL_REPO_GUARD_MAX_REVIEWS: ${{ vars.EXTERNAL_REPO_GUARD_MAX_REVIEWS || '3' }}
           EXTERNAL_REPO_GUARD_SEARCH_LIMIT: ${{ vars.EXTERNAL_REPO_GUARD_SEARCH_LIMIT || '20' }}

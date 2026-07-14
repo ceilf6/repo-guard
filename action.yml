@@ -28,6 +28,10 @@ inputs:
     description: "Max tokens for LLM response"
     required: false
     default: "4096"
+  structured-output:
+    description: "OpenRouter structured output mode: 'off' or 'auto'"
+    required: false
+    default: "off"
   github-token:
     description: "GitHub token for posting comments"
     required: false
@@ -57,6 +61,7 @@ runs:
         LLM_API_KEY: ${{ inputs.api-key }}
         LLM_BASE_URL: ${{ inputs.base-url }}
         LLM_MAX_TOKENS: ${{ inputs.max-tokens }}
+        LLM_STRUCTURED_OUTPUT: ${{ inputs.structured-output }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         EXTRA_INSTRUCTIONS: ${{ inputs.extra-instructions }}
         PR_NUMBER: ${{ github.event.pull_request.number }}

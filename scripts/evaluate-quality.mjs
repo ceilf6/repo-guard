@@ -3,8 +3,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chatCompletion } from './llm-client.mjs';
+import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
 import { buildIssueUserMessage, buildPRUserMessage, getChangedNewLines, loadSystemPrompt } from './prompts.mjs';
 import { extractInlineComments, extractRecommendation, normalizeReviewResponse, stripThinkingBlocks } from './review-logic.mjs';
+import { getReviewResponseFormat } from './review-contracts.mjs';
 
 export { getChangedNewLines };
 
@@ -223,6 +225,7 @@ export function getEnvConfig(env = process.env) {
     apiKey: env.API_KEY || env.LLM_API_KEY || '',
     model: env.MODEL || env.LLM_MODEL || '',
     maxTokens: Number.parseInt(env.MAX_TOKENS || env.LLM_MAX_TOKENS || `${DEFAULT_MAX_TOKENS}`, 10),
+    structuredOutput: parseStructuredOutputMode(env.STRUCTURED_OUTPUT || env.LLM_STRUCTURED_OUTPUT),
     outputDir: env.QUALITY_EVAL_OUTPUT_DIR || DEFAULT_OUTPUT_DIR,
   };
 }
@@ -311,6 +314,8 @@ export async function runQualityEvaluation(config = getEnvConfig()) {
       apiKey: config.apiKey,
       baseURL: config.baseURL,
       maxTokens: config.maxTokens,
+      structuredOutputMode: config.structuredOutput,
+      responseFormat: getReviewResponseFormat(fixture.kind),
       system: fixture.system,
       messages: [{ role: 'user', content: fixture.user }],
     });

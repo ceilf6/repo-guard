@@ -217,6 +217,7 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     model: 'mimo-v2.5-pro',
     maxTokens: 3200,
     outputDir: 'quality-eval-results',
+    structuredOutput: 'off',
   });
 
   assert.deepEqual(getEnvConfig({
@@ -233,7 +234,22 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     model: 'gpt-test',
     maxTokens: 1024,
     outputDir: '/tmp/eval',
+    structuredOutput: 'off',
   });
+
+  assert.equal(getEnvConfig({
+    PROVIDER: 'openai',
+    BASE_URL: 'https://openrouter.ai/api/v1',
+    API_KEY: 'secret',
+    MODEL: 'openai/gpt-5.5',
+    STRUCTURED_OUTPUT: 'auto',
+    LLM_STRUCTURED_OUTPUT: 'off',
+  }).structuredOutput, 'auto');
+
+  assert.throws(
+    () => getEnvConfig({ STRUCTURED_OUTPUT: 'true' }),
+    /LLM_STRUCTURED_OUTPUT must be "off" or "auto"/,
+  );
 });
 
 test('evaluate-quality module can be imported from eval scripts', () => {

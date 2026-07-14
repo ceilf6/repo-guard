@@ -2,6 +2,7 @@
 import { chatCompletion } from './llm-client.mjs';
 import { fetchPRInfo, fetchPRDiff, fetchPRLinkedIssues } from './github-api.mjs';
 import { loadSystemPrompt, buildPRUserMessage } from './prompts.mjs';
+import { PR_REVIEW_RESPONSE_FORMAT } from './review-contracts.mjs';
 import {
   extractInlineComments,
   extractRecommendation,
@@ -32,6 +33,8 @@ export async function buildPRReview(config) {
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     maxTokens: config.maxTokens,
+    structuredOutputMode: config.structuredOutput,
+    responseFormat: PR_REVIEW_RESPONSE_FORMAT,
     system: systemPrompt,
     messages,
   });
