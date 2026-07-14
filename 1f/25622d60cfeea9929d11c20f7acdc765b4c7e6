@@ -1,0 +1,31 @@
+scripts/review-contracts.mjs
+  s_29700ba6a47311::t_7380e0fa42a045 1-99,101-103,105-188,213-227
+scripts/review-logic.mjs
+  s_29700ba6a47311::t_fec95d07623877 2-7,95,104
+tests/review-contracts.test.mjs
+  s_29700ba6a47311::t_6ab068fdaef330 1-143
+tests/review-logic.test.mjs
+  s_29700ba6a47311::t_5137a1d981b846 4,16-103
+scripts/llm-client.mjs
+  s_29700ba6a47311::t_40c830d245c26c 2-10,86-115,136-141,143-180
+tests/llm-client.test.mjs
+  s_29700ba6a47311::t_0d99fc86b10022 3-37,54-208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1f25622d60cfeea9929d11c20f7acdc765b4c7e6",
+  "prompts": {},
+  "sessions": {
+    "s_29700ba6a47311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5eb6-3e4d-7062-9f1a-02e08ad74c4d",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
