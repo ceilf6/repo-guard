@@ -1,0 +1,35 @@
+README.md
+  s_29700ba6a47311::t_3e71ae6a6ba97f 231-235
+docs/quality-evaluation.md
+  s_29700ba6a47311::t_2bc1563c3ec578 43-45,64
+docs/superpowers/plans/2026-07-14-openrouter-structured-outputs.md
+  s_29700ba6a47311::t_ca88b135ede52a 3-4
+docs/superpowers/specs/2026-07-14-openrouter-structured-outputs-design.md
+  s_29700ba6a47311::t_9a7da26ebe9c8f 26,46,111-112,132,138,154,160,167,183-185,210,214,239,251-252,266,299,305-306,310-312,348-349,351
+scripts/review-logic.mjs
+  s_29700ba6a47311::t_ea217c5368c7e9 222,226-228,250-253,269-281,291,300,303,417-435,445,448,451,830-838,880,906-921
+tests/review-logic.test.mjs
+  s_29700ba6a47311::t_80c3a73b4fe362 133-182
+scripts/llm-client.mjs
+  s_29700ba6a47311::t_229e329468a736 41,43,47,65-66
+tests/llm-client.test.mjs
+  s_29700ba6a47311::t_a9753dc6b34664 192,200-201,209-210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f67417526c67d8b9771920944fd8b7fe6fbf38d4",
+  "prompts": {},
+  "sessions": {
+    "s_29700ba6a47311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5eb6-3e4d-7062-9f1a-02e08ad74c4d",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
