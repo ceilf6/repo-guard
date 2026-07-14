@@ -1,0 +1,35 @@
+.github/workflows/external-repo-guard.yml
+  s_29700ba6a47311::t_1d90fdf6a571fc 44
+.github/workflows/repo-guard.yml
+  s_29700ba6a47311::t_4a6b97526bdede 49
+action.yml
+  s_29700ba6a47311::t_993250bd903ad0 31-34,64
+scripts/evaluate-quality.mjs
+  s_29700ba6a47311::t_f1606c94c3225b 6,9,228,317-318
+scripts/external-dispatcher.mjs
+  s_29700ba6a47311::t_b430197aaa37cc 3,24,79
+scripts/pr-reviewer.mjs
+  s_29700ba6a47311::t_4b411cb07f3948 5,36-37
+scripts/review.mjs
+  s_29700ba6a47311::t_fa3757b1b6d50a 4,7,27,94,134-135
+tests/quality-eval.test.mjs
+  s_29700ba6a47311::t_2c7e713d0c72df 220,237,239-252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "181ba237111f7b095222aa262acc5f18fb85abc9",
+  "prompts": {},
+  "sessions": {
+    "s_29700ba6a47311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5eb6-3e4d-7062-9f1a-02e08ad74c4d",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
