@@ -1,0 +1,41 @@
+README.md
+  s_1435f408b54c31::t_808b8a0bc2e326 209
+docs/self-hosted-claude-code-runner.md
+  s_1435f408b54c31::t_c259f8866c2e67 43-44
+scripts/claude-code-client.mjs
+  s_1435f408b54c31::t_f0a7c0bba8d6ce 14-68,148-149
+scripts/external-dispatcher-logic.mjs
+  s_1435f408b54c31::t_ecd2ae607318a6 3-5,10-44
+scripts/external-dispatcher.mjs
+  s_1435f408b54c31::t_e6917439c4abad 5,10,13,16-18,57
+scripts/review-logic.mjs
+  s_1435f408b54c31::t_b4f4451867022b 12-50
+scripts/review.mjs
+  s_1435f408b54c31::t_48a118be85d625 2,8,16,19,22-24
+tests/claude-code-client.test.mjs
+  s_1435f408b54c31::t_e50d83a246548a 8,11,14,18-34,127-134,210,234-235,250-273
+tests/external-dispatcher-logic.test.mjs
+  s_1435f408b54c31::t_463242a434c963 4,12,15-51
+tests/review-engine.test.mjs
+  s_1435f408b54c31::t_96792e8ab8bf43 52-55,104-107
+tests/review-logic.test.mjs
+  s_1435f408b54c31::t_16fa4c68f0b6b2 4,15,18-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a792f886d9e276f5045c865285108e4d18dd7b31",
+  "prompts": {},
+  "sessions": {
+    "s_1435f408b54c31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b8e3704-3203-4e5c-b96b-4673729adf57",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
