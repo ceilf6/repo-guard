@@ -1,6 +1,6 @@
 // @ts-check
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -20,11 +20,28 @@ export function parseClaudeCodeTimeoutMinutes(value, fallback = DEFAULT_TIMEOUT_
   return minutes;
 }
 
+// --safe-mode keeps auth and built-in tools but refuses all customization
+// loading (CLAUDE.md, .claude settings, hooks, MCP, plugins), so a reviewed
+// checkout cannot smuggle instructions in through the trusted-config channel.
 export function buildClaudeCodeArgs({ model, system, tools = CLAUDE_CODE_READONLY_TOOLS }) {
-  const args = ['--print', '--output-format', 'json', '--no-session-persistence', '--tools', tools];
+  const args = ['--print', '--output-format', 'json', '--no-session-persistence', '--safe-mode', '--tools', tools];
   if (system) args.push('--append-system-prompt', system);
   if (model) args.push('--model', model);
   return args;
+}
+
+// An existing-but-empty workspace (e.g. github.workspace without a checkout
+// step) must not make the reviewer believe it can verify repository context.
+export function resolveClaudeCodeWorkspace(workspace) {
+  if (!workspace) return '';
+  if (!existsSync(workspace) || !statSync(workspace).isDirectory()) {
+    throw new Error(`Claude Code workspace is not a directory: ${workspace}`);
+  }
+  if (readdirSync(workspace).length === 0) {
+    console.warn(`Claude Code workspace 为空目录，退化为 prompt-only 模式: ${workspace}`);
+    return '';
+  }
+  return workspace;
 }
 
 export function parseClaudeCodeOutput(stdout) {

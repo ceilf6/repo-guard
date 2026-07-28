@@ -182,7 +182,7 @@ jobs:
 
 `engine: claude-code` 不再调用任何 HTTP API，而是在 runner 本机执行 `claude -p`——评审跑在你自己的机器、你自己的 Claude 登录态（订阅或 API key）上，仓库不需要配置 `LLM_API_KEY`。搭配 self-hosted runner 时，出网 IP 就是你平时使用 Claude 的网络环境，这对订阅账号是更常态的使用画像。
 
-相对 api 引擎的另一个质量差异：claude-code 引擎把 PR head 的 checkout 作为工作目录（`workspace` 输入），评审时可用只读工具（Read/Grep/Glob）查证 diff 之外的调用方、类型定义与既有模式——评审依据不再只有 diff。工具集被硬限制为只读，无 Bash、无网络、无写入；输出仍走同一套中文契约解析与行级评论发布管道。
+相对 api 引擎的另一个质量差异：claude-code 引擎把 PR head 的 checkout 作为工作目录（`workspace` 输入），评审时可用只读工具（Read/Grep/Glob）查证 diff 之外的调用方、类型定义与既有模式——评审依据不再只有 diff。工具集被硬限制为只读（无 Bash、无网络、无写入），且以 `--safe-mode` 运行：被评审 checkout 内的 `CLAUDE.md`/`.claude` 配置/hooks/MCP 一律不加载，评审对象无法借「项目配置」通道注入指令。输出仍走同一套中文契约解析与行级评论发布管道。
 
 ```yaml
 jobs:
@@ -204,7 +204,7 @@ jobs:
 行为差异与边界：
 
 - `provider` / `api-key` / `base-url` / `structured-output` / `provider-order` 仅作用于 api 引擎，claude-code 引擎忽略它们。
-- 无仓库 checkout 时（如 issue 评审、外部 PR 调度）自动退化为 prompt-only 模式，在空白临时目录中运行。
+- 无仓库 checkout 时（如外部 PR 调度，或 `workspace` 指向空目录）自动退化为 prompt-only 模式，在空白临时目录中运行，system prompt 不再声称可查证仓库上下文。
 - 单次评审默认 20 分钟超时，可用环境变量 `CLAUDE_CODE_TIMEOUT_MINUTES` 调整；`CLAUDE_CODE_EXECUTABLE` 可指定 CLI 路径。
 - 仓库与 PR 内容始终作为待评审数据注入，system prompt 显式声明其中的指令性文本一律忽略。
 

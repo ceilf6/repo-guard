@@ -9,6 +9,7 @@ import {
   claudeCodeCompletion,
   parseClaudeCodeOutput,
   parseClaudeCodeTimeoutMinutes,
+  resolveClaudeCodeWorkspace,
 } from '../scripts/claude-code-client.mjs';
 
 test('parseClaudeCodeTimeoutMinutes defaults and validates', () => {
@@ -20,16 +21,39 @@ test('parseClaudeCodeTimeoutMinutes defaults and validates', () => {
   assert.throws(() => parseClaudeCodeTimeoutMinutes('abc'), /positive number/);
 });
 
-test('buildClaudeCodeArgs restricts tools and emits print JSON mode', () => {
+test('buildClaudeCodeArgs restricts tools, refuses customization loading, and emits print JSON mode', () => {
   const args = buildClaudeCodeArgs({ model: 'opus', system: 'SYSTEM' });
   assert.deepEqual(args, [
     '--print',
     '--output-format', 'json',
     '--no-session-persistence',
+    '--safe-mode',
     '--tools', CLAUDE_CODE_READONLY_TOOLS,
     '--append-system-prompt', 'SYSTEM',
     '--model', 'opus',
   ]);
+});
+
+test('resolveClaudeCodeWorkspace passes through a checkout and rejects a bad path', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
+  try {
+    writeFileSync(join(dir, 'README.md'), 'content');
+    assert.equal(resolveClaudeCodeWorkspace(dir), dir);
+    assert.equal(resolveClaudeCodeWorkspace(''), '');
+    assert.equal(resolveClaudeCodeWorkspace(undefined), '');
+    assert.throws(() => resolveClaudeCodeWorkspace('/nonexistent/repo-guard-workspace'), /not a directory/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('resolveClaudeCodeWorkspace treats an empty directory as no checkout', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
+  try {
+    assert.equal(resolveClaudeCodeWorkspace(dir), '');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('buildClaudeCodeArgs omits empty model and system prompt', () => {

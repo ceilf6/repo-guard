@@ -79,6 +79,7 @@ process.stdin.on('end', () => {
     assert.match(echoed.args[systemIndex + 1], /仓库上下文探查/);
     const modelIndex = echoed.args.indexOf('--model');
     assert.equal(echoed.args[modelIndex + 1], 'opus');
+    assert.ok(echoed.args.includes('--safe-mode'));
   } finally {
     if (previousExecutable === undefined) {
       delete process.env.CLAUDE_CODE_EXECUTABLE;
@@ -86,5 +87,48 @@ process.stdin.on('end', () => {
       process.env.CLAUDE_CODE_EXECUTABLE = previousExecutable;
     }
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('completeReview downgrades an empty workspace to prompt-only mode', async () => {
+  const stubDir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
+  const emptyWorkspace = mkdtempSync(join(tmpdir(), 'repo-guard-empty-'));
+  const previousExecutable = process.env.CLAUDE_CODE_EXECUTABLE;
+  try {
+    const stub = join(stubDir, 'claude-stub.mjs');
+    writeFileSync(stub, `#!/usr/bin/env node
+let input = '';
+process.stdin.on('data', (chunk) => { input += chunk; });
+process.stdin.on('end', () => {
+  process.stdout.write(JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result: JSON.stringify({ args: process.argv.slice(2) }),
+  }));
+});
+`);
+    chmodSync(stub, 0o755);
+    process.env.CLAUDE_CODE_EXECUTABLE = stub;
+
+    const result = await completeReview({
+      engine: 'claude-code',
+      system: '评审系统提示',
+      messages: [{ role: 'user', content: 'Issue 内容' }],
+      workspace: emptyWorkspace,
+    });
+
+    const echoed = JSON.parse(result);
+    const systemIndex = echoed.args.indexOf('--append-system-prompt');
+    assert.match(echoed.args[systemIndex + 1], /上下文边界/);
+    assert.ok(!echoed.args[systemIndex + 1].includes('仓库上下文探查'));
+  } finally {
+    if (previousExecutable === undefined) {
+      delete process.env.CLAUDE_CODE_EXECUTABLE;
+    } else {
+      process.env.CLAUDE_CODE_EXECUTABLE = previousExecutable;
+    }
+    rmSync(stubDir, { recursive: true, force: true });
+    rmSync(emptyWorkspace, { recursive: true, force: true });
   }
 });
