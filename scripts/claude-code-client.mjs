@@ -8,8 +8,28 @@ import { join } from 'node:path';
 // only gets repository lookup tools: no mutation, no Bash, no network egress.
 export const CLAUDE_CODE_READONLY_TOOLS = 'Read,Grep,Glob';
 
+// Reads outside the working directory are already auto-denied in print mode
+// (verified on 2.1.220: the attempt lands in permission_denials, content never
+// read). These deny rules are defense in depth for the runner user's own
+// credentials and the checkout's .git metadata; --settings is honored under
+// --safe-mode (also verified on 2.1.220).
+export const CLAUDE_CODE_PERMISSION_SETTINGS = JSON.stringify({
+  permissions: {
+    deny: [
+      'Read(~/.claude/**)',
+      'Read(~/.claude.json)',
+      'Read(~/.claude.json.backup)',
+      'Read(~/.config/claude/**)',
+      'Read(./.git/**)',
+    ],
+  },
+});
+
 const DEFAULT_TIMEOUT_MINUTES = 20;
 const MAX_DIAGNOSTIC_CHARS = 400;
+// A misbehaving CLI that streams output for the whole timeout window must fail
+// as a clear review error, not as runner OOM.
+const DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 
 // Injection isolation rests entirely on --safe-mode/--tools semantics, which
 // are only verified against a known CLI version. Anything older fails fast
@@ -79,7 +99,14 @@ export function parseClaudeCodeTimeoutMinutes(value, fallback = DEFAULT_TIMEOUT_
 // loading (CLAUDE.md, .claude settings, hooks, MCP, plugins), so a reviewed
 // checkout cannot smuggle instructions in through the trusted-config channel.
 export function buildClaudeCodeArgs({ model, system, tools = CLAUDE_CODE_READONLY_TOOLS }) {
-  const args = ['--print', '--output-format', 'json', '--no-session-persistence', '--safe-mode', '--tools', tools];
+  const args = [
+    '--print',
+    '--output-format', 'json',
+    '--no-session-persistence',
+    '--safe-mode',
+    '--tools', tools,
+    '--settings', CLAUDE_CODE_PERMISSION_SETTINGS,
+  ];
   if (system) args.push('--append-system-prompt', system);
   if (model) args.push('--model', model);
   return args;
@@ -132,6 +159,7 @@ export async function claudeCodeCompletion({
   workspace,
   executable = process.env.CLAUDE_CODE_EXECUTABLE || 'claude',
   timeoutMinutes = parseClaudeCodeTimeoutMinutes(process.env.CLAUDE_CODE_TIMEOUT_MINUTES),
+  maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
 }) {
   if (workspace && (!existsSync(workspace) || !statSync(workspace).isDirectory())) {
     throw new Error(`Claude Code workspace is not a directory: ${workspace}`);
@@ -157,6 +185,7 @@ export async function claudeCodeCompletion({
       prompt,
       cwd: workspace || scratch,
       timeoutMs: timeoutMinutes * 60_000,
+      maxOutputBytes,
     });
     return parseClaudeCodeOutput(stdout);
   } finally {
@@ -164,7 +193,7 @@ export async function claudeCodeCompletion({
   }
 }
 
-function runClaudeCode({ executable, args, prompt, cwd, timeoutMs }) {
+function runClaudeCode({ executable, args, prompt, cwd, timeoutMs, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES }) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       cwd,
@@ -174,6 +203,7 @@ function runClaudeCode({ executable, args, prompt, cwd, timeoutMs }) {
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    let overflowed = false;
     let spawnError;
 
     const timer = setTimeout(() => {
@@ -181,12 +211,27 @@ function runClaudeCode({ executable, args, prompt, cwd, timeoutMs }) {
       child.kill('SIGKILL');
     }, timeoutMs);
 
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const collect = (target, chunk) => {
+      if (overflowed) return target;
+      const combined = target + chunk;
+      if (combined.length > maxOutputBytes) {
+        overflowed = true;
+        child.kill('SIGKILL');
+        return combined.slice(0, maxOutputBytes);
+      }
+      return combined;
+    };
+
+    child.stdout.on('data', (chunk) => { stdout = collect(stdout, chunk); });
+    child.stderr.on('data', (chunk) => { stderr = collect(stderr, chunk); });
     child.on('error', (err) => { spawnError = err; });
 
     child.on('close', (code) => {
       clearTimeout(timer);
+      if (overflowed) {
+        reject(new Error(`Claude Code output exceeded ${maxOutputBytes} bytes and the process was killed`));
+        return;
+      }
       if (timedOut) {
         reject(new Error(`Claude Code timed out after ${timeoutMs / 60_000} minutes`));
         return;

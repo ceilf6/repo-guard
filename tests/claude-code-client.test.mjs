@@ -4,6 +4,7 @@ import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  CLAUDE_CODE_PERMISSION_SETTINGS,
   CLAUDE_CODE_READONLY_TOOLS,
   MIN_VERIFIED_CLI_VERSION,
   buildClaudeCodeArgs,
@@ -14,6 +15,14 @@ import {
   parseClaudeCodeVersion,
   resolveClaudeCodeWorkspace,
 } from '../scripts/claude-code-client.mjs';
+
+test('CLAUDE_CODE_PERMISSION_SETTINGS hard-denies credential paths and .git', () => {
+  const settings = JSON.parse(CLAUDE_CODE_PERMISSION_SETTINGS);
+  const deny = settings.permissions.deny;
+  assert.ok(deny.includes('Read(~/.claude/**)'));
+  assert.ok(deny.includes('Read(~/.claude.json)'));
+  assert.ok(deny.includes('Read(./.git/**)'));
+});
 
 test('parseClaudeCodeVersion extracts the semver triple from --version output', () => {
   assert.equal(parseClaudeCodeVersion('2.1.220 (Claude Code)'), '2.1.220');
@@ -49,6 +58,7 @@ test('buildClaudeCodeArgs restricts tools, refuses customization loading, and em
     '--no-session-persistence',
     '--safe-mode',
     '--tools', CLAUDE_CODE_READONLY_TOOLS,
+    '--settings', CLAUDE_CODE_PERMISSION_SETTINGS,
     '--append-system-prompt', 'SYSTEM',
     '--model', 'opus',
   ]);
@@ -222,6 +232,29 @@ process.stdin.on('end', () => {
         timeoutMinutes: 1,
       }),
       /exited with code 3.*auth expired/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('claudeCodeCompletion kills the process when output exceeds the cap', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
+  try {
+    const stub = writeStub(dir, `${VERSION_BRANCH}
+process.stdin.resume();
+const block = 'x'.repeat(64 * 1024);
+setInterval(() => process.stdout.write(block), 5);
+`);
+    await assert.rejects(
+      claudeCodeCompletion({
+        messages: [{ role: 'user', content: '内容' }],
+        workspace: dir,
+        executable: stub,
+        timeoutMinutes: 1,
+        maxOutputBytes: 256 * 1024,
+      }),
+      /output exceeded 262144 bytes/,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
