@@ -1,0 +1,47 @@
+.github/workflows/external-repo-guard.yml
+  s_7418fab48368a8::t_117c8113224e94 44
+.github/workflows/repo-guard.yml
+  s_7418fab48368a8::t_9709d9c3c7b55b 50
+action.yml
+  s_7418fab48368a8::t_215de437ff9e82 31-34,64
+scripts/evaluate-quality.mjs
+  s_7418fab48368a8::t_7db024f2e864c8 6,228,317
+scripts/external-dispatcher.mjs
+  s_7418fab48368a8::t_df85fce1b0774b 3,25,80
+scripts/llm-client.mjs
+  s_7418fab48368a8::t_fa7581c553a22b 2,154,160-162,180-182,184-185,215
+scripts/openrouter-provider-routing.mjs
+  s_7418fab48368a8::t_bbe985a9c62f61 1-24
+scripts/pr-reviewer.mjs
+  s_7418fab48368a8::t_b83d96e4657a04 36
+scripts/review.mjs
+  s_7418fab48368a8::t_ab6ecc8b0815e8 4,28,95,135
+tests/llm-client.test.mjs
+  s_7418fab48368a8::t_560c07c4b55b53 118-198
+tests/openrouter-provider-routing.test.mjs
+  s_7418fab48368a8::t_ad9f26cdd74ac1 1-42
+tests/quality-eval.test.mjs
+  s_7418fab48368a8::t_530c9e8c96ecb0 220,229,238
+tests/structured-output-config.test.mjs
+  s_7418fab48368a8::t_23d71e05dfdf2c 17-27
+README.md
+  s_7418fab48368a8::t_5b71d0d9a221db 85,97,134,241-255
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9c40d7148d8b946a499a250d1617a0be7165c162",
+  "prompts": {},
+  "sessions": {
+    "s_7418fab48368a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5ad0c806-0043-401a-9e52-9dea4f88bf3e",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
