@@ -161,9 +161,7 @@ export async function claudeCodeCompletion({
   timeoutMinutes = parseClaudeCodeTimeoutMinutes(process.env.CLAUDE_CODE_TIMEOUT_MINUTES),
   maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
 }) {
-  if (workspace && (!existsSync(workspace) || !statSync(workspace).isDirectory())) {
-    throw new Error(`Claude Code workspace is not a directory: ${workspace}`);
-  }
+  const resolvedWorkspace = resolveClaudeCodeWorkspace(workspace);
 
   const prompt = (messages || [])
     .map((message) => message?.content)
@@ -177,13 +175,13 @@ export async function claudeCodeCompletion({
 
   // Without a checkout the CLI still needs a working directory it can trust;
   // an empty scratch directory keeps it away from whatever cwd the caller has.
-  const scratch = workspace ? null : mkdtempSync(join(tmpdir(), 'repo-guard-claude-'));
+  const scratch = resolvedWorkspace ? null : mkdtempSync(join(tmpdir(), 'repo-guard-claude-'));
   try {
     const stdout = await runClaudeCode({
       executable,
       args: buildClaudeCodeArgs({ model, system }),
       prompt,
-      cwd: workspace || scratch,
+      cwd: resolvedWorkspace || scratch,
       timeoutMs: timeoutMinutes * 60_000,
       maxOutputBytes,
     });
@@ -200,8 +198,12 @@ function runClaudeCode({ executable, args, prompt, cwd, timeoutMs, maxOutputByte
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
-    let stdout = '';
-    let stderr = '';
+    // Chunks stay Buffers until the process closes: decoding per chunk would
+    // corrupt multi-byte UTF-8 characters split across pipe reads, and the
+    // output cap must meter real bytes, not UTF-16 code units.
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let outputBytes = 0;
     let timedOut = false;
     let overflowed = false;
     let spawnError;
@@ -211,23 +213,25 @@ function runClaudeCode({ executable, args, prompt, cwd, timeoutMs, maxOutputByte
       child.kill('SIGKILL');
     }, timeoutMs);
 
-    const collect = (target, chunk) => {
-      if (overflowed) return target;
-      const combined = target + chunk;
-      if (combined.length > maxOutputBytes) {
+    const collect = (chunks, chunk) => {
+      if (overflowed) return;
+      outputBytes += chunk.length;
+      if (outputBytes > maxOutputBytes) {
         overflowed = true;
         child.kill('SIGKILL');
-        return combined.slice(0, maxOutputBytes);
+        return;
       }
-      return combined;
+      chunks.push(chunk);
     };
 
-    child.stdout.on('data', (chunk) => { stdout = collect(stdout, chunk); });
-    child.stderr.on('data', (chunk) => { stderr = collect(stderr, chunk); });
+    child.stdout.on('data', (chunk) => collect(stdoutChunks, chunk));
+    child.stderr.on('data', (chunk) => collect(stderrChunks, chunk));
     child.on('error', (err) => { spawnError = err; });
 
     child.on('close', (code) => {
       clearTimeout(timer);
+      const stdout = Buffer.concat(stdoutChunks).toString('utf8');
+      const stderr = Buffer.concat(stderrChunks).toString('utf8');
       if (overflowed) {
         reject(new Error(`Claude Code output exceeded ${maxOutputBytes} bytes and the process was killed`));
         return;

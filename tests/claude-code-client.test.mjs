@@ -238,6 +238,34 @@ process.stdin.on('end', () => {
   }
 });
 
+test('claudeCodeCompletion reassembles multi-byte characters split across chunks', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
+  try {
+    const stub = writeStub(dir, `${VERSION_BRANCH}
+process.stdin.resume();
+process.stdin.on('end', () => {
+  const envelope = Buffer.from(JSON.stringify({
+    type: 'result', subtype: 'success', is_error: false, result: '评审结论：批准',
+  }));
+  const splitAt = envelope.indexOf(Buffer.from('审')) + 1;
+  process.stdout.write(envelope.slice(0, splitAt));
+  setTimeout(() => {
+    process.stdout.write(envelope.slice(splitAt));
+  }, 40);
+});
+`);
+    const result = await claudeCodeCompletion({
+      messages: [{ role: 'user', content: '内容' }],
+      workspace: dir,
+      executable: stub,
+      timeoutMinutes: 1,
+    });
+    assert.equal(result, '评审结论：批准');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('claudeCodeCompletion kills the process when output exceeds the cap', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
   try {
