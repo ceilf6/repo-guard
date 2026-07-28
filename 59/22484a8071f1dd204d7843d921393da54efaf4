@@ -1,0 +1,23 @@
+README.md
+  s_1435f408b54c31::t_7c39ae051f7825 213
+docs/self-hosted-claude-code-runner.md
+  s_1435f408b54c31::t_686cef256b4fbe 73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5922484a8071f1dd204d7843d921393da54efaf4",
+  "prompts": {},
+  "sessions": {
+    "s_1435f408b54c31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b8e3704-3203-4e5c-b96b-4673729adf57",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
