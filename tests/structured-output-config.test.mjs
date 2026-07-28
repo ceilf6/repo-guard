@@ -14,6 +14,17 @@ test('Action and repository workflows default structured output to auto', () => 
   assert.match(externalWorkflow, /vars\.LLM_STRUCTURED_OUTPUT \|\| 'auto'/);
 });
 
+test('Action and repository workflows expose provider routing order', () => {
+  const action = read('../action.yml');
+  const repositoryWorkflow = read('../.github/workflows/repo-guard.yml');
+  const externalWorkflow = read('../.github/workflows/external-repo-guard.yml');
+
+  assert.match(action, /provider-order:\n(?:.*\n){2}\s+default: ""/);
+  assert.match(action, /LLM_PROVIDER_ORDER: \$\{\{ inputs\.provider-order \}\}/);
+  assert.match(repositoryWorkflow, /provider-order: \$\{\{ vars\.LLM_PROVIDER_ORDER \}\}/);
+  assert.match(externalWorkflow, /LLM_PROVIDER_ORDER: \$\{\{ vars\.LLM_PROVIDER_ORDER \}\}/);
+});
+
 test('Action and workflows do not expose a cross-provider token limit', () => {
   const files = [
     read('../action.yml'),

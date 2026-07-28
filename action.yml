@@ -28,6 +28,10 @@ inputs:
     description: "OpenRouter structured output mode: 'off' or 'auto'"
     required: false
     default: "auto"
+  provider-order:
+    description: "Comma-separated OpenRouter provider routing order (e.g. 'azure' or 'azure,openai')"
+    required: false
+    default: ""
   github-token:
     description: "GitHub token for posting comments"
     required: false
@@ -57,6 +61,7 @@ runs:
         LLM_API_KEY: ${{ inputs.api-key }}
         LLM_BASE_URL: ${{ inputs.base-url }}
         LLM_STRUCTURED_OUTPUT: ${{ inputs.structured-output }}
+        LLM_PROVIDER_ORDER: ${{ inputs.provider-order }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         EXTRA_INSTRUCTIONS: ${{ inputs.extra-instructions }}
         PR_NUMBER: ${{ github.event.pull_request.number }}

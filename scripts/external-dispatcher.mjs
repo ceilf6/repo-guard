@@ -1,5 +1,6 @@
 // @ts-check
 import { listIssueComments, postComment, searchIssuesAndPullRequests } from './github-api.mjs';
+import { parseProviderOrder } from './openrouter-provider-routing.mjs';
 import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
 import { buildPRReview } from './pr-reviewer.mjs';
 import {
@@ -21,6 +22,7 @@ const config = {
   apiKey: env.LLM_API_KEY,
   baseURL: env.LLM_BASE_URL || '',
   structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
+  providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
   extraInstructions: env.EXTRA_INSTRUCTIONS || '',
   trigger: env.EXTERNAL_REPO_GUARD_TRIGGER || DEFAULT_EXTERNAL_TRIGGER,
   actor: env.EXTERNAL_REPO_GUARD_TRIGGER_ACTOR || DEFAULT_EXTERNAL_ACTOR,
@@ -75,6 +77,7 @@ async function main() {
         apiKey: config.apiKey,
         baseURL: config.baseURL,
         structuredOutput: config.structuredOutput,
+        providerOrder: config.providerOrder,
         extraInstructions: config.extraInstructions,
         userPrompt,
       });
