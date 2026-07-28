@@ -1,4 +1,5 @@
 // @ts-check
+import { buildProviderRouting } from './openrouter-provider-routing.mjs';
 import { supportsOpenRouterStructuredOutputs } from './openrouter-structured-output.mjs';
 
 const STRUCTURED_OUTPUT_INSTRUCTION = [
@@ -150,11 +151,15 @@ export async function chatCompletion({
   messages,
   system,
   structuredOutputMode = 'auto',
+  providerOrder = [],
   responseFormat,
 }) {
   const base = normalizeBaseURL(provider, baseURL);
 
   if (provider === 'anthropic') {
+    if (providerOrder.length > 0) {
+      console.warn('provider order ignored: Anthropic Messages has no provider routing');
+    }
     const url = `${base}/messages`;
     const body = buildAnthropicRequest(model, messages, system);
     const res = await fetchWithRetry(url, {
@@ -172,7 +177,12 @@ export async function chatCompletion({
 
   // OpenAI-compatible
   const url = `${base}/chat/completions`;
+  if (providerOrder.length > 0) {
+    console.log(`provider routing order: ${providerOrder.join(' > ')}`);
+  }
   const legacyBody = buildOpenAIRequest(model, messages, system);
+  const legacyRouting = buildProviderRouting({ order: providerOrder });
+  if (legacyRouting) legacyBody.provider = legacyRouting;
   const structuredSupported = responseFormat && await supportsOpenRouterStructuredOutputs({
     mode: structuredOutputMode,
     provider,
@@ -202,7 +212,7 @@ export async function chatCompletion({
       { temperature: false },
     ),
     response_format: responseFormat,
-    provider: { require_parameters: true },
+    provider: buildProviderRouting({ order: providerOrder, requireParameters: true }),
   };
 
   let structuredError;

@@ -217,6 +217,7 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     model: 'mimo-v2.5-pro',
     outputDir: 'quality-eval-results',
     structuredOutput: 'auto',
+    providerOrder: [],
   });
 
   assert.deepEqual(getEnvConfig({
@@ -225,6 +226,7 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     LLM_API_KEY: 'secret',
     LLM_MODEL: 'gpt-test',
     LLM_MAX_TOKENS: '1024',
+    LLM_PROVIDER_ORDER: 'azure',
     QUALITY_EVAL_OUTPUT_DIR: '/tmp/eval',
   }), {
     provider: 'openai',
@@ -233,6 +235,7 @@ test('getEnvConfig accepts short and action-compatible environment variable name
     model: 'gpt-test',
     outputDir: '/tmp/eval',
     structuredOutput: 'auto',
+    providerOrder: ['azure'],
   });
 
   assert.equal(getEnvConfig({

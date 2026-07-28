@@ -33,6 +33,7 @@ export async function buildPRReview(config) {
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutputMode: config.structuredOutput,
+    providerOrder: config.providerOrder,
     responseFormat: PR_REVIEW_RESPONSE_FORMAT,
     system: systemPrompt,
     messages,

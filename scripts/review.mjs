@@ -1,6 +1,7 @@
 // @ts-check
 import { chatCompletion } from './llm-client.mjs';
 import { fetchIssue, postComment, postPRReview } from './github-api.mjs';
+import { parseProviderOrder } from './openrouter-provider-routing.mjs';
 import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
 import { loadSystemPrompt, buildIssueUserMessage } from './prompts.mjs';
 import { buildPRReview } from './pr-reviewer.mjs';
@@ -24,6 +25,7 @@ const config = {
   apiKey: env.LLM_API_KEY,
   baseURL: env.LLM_BASE_URL || '',
   structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
+  providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
   githubToken: env.GITHUB_TOKEN,
   extraInstructions: env.EXTRA_INSTRUCTIONS || '',
   prNumber: env.PR_NUMBER,
@@ -90,6 +92,7 @@ async function reviewPR(prNumber) {
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutput: config.structuredOutput,
+    providerOrder: config.providerOrder,
     extraInstructions: config.extraInstructions,
     userPrompt,
   });
@@ -129,6 +132,7 @@ async function reviewIssue(issueNumber) {
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutputMode: config.structuredOutput,
+    providerOrder: config.providerOrder,
     responseFormat: ISSUE_REVIEW_RESPONSE_FORMAT,
     system: systemPrompt,
     messages,

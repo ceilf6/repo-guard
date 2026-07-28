@@ -82,6 +82,7 @@ jobs:
 | `LLM_MODEL` | `gpt-4o` | Model name |
 | `LLM_BASE_URL` | (empty) | Custom API base URL for relay/proxy |
 | `LLM_STRUCTURED_OUTPUT` | `auto` | `auto` uses OpenRouter JSON Schema when supported; explicit `off` always uses the legacy free-text request |
+| `LLM_PROVIDER_ORDER` | (empty) | Comma-separated OpenRouter upstream provider order, e.g. `azure` |
 
 ## Inputs
 
@@ -93,6 +94,7 @@ jobs:
 | `api-key` | Yes | — | LLM API key |
 | `base-url` | No | `""` | Custom API base URL |
 | `structured-output` | No | `auto` | OpenRouter Structured Outputs mode: `off` or `auto` |
+| `provider-order` | No | `""` | Comma-separated OpenRouter upstream provider order, e.g. `azure` |
 | `github-token` | No | `github.token` | GitHub token |
 | `extra-instructions` | No | `""` | Additional prompt instructions |
 
@@ -129,6 +131,7 @@ The dispatcher also uses the normal LLM settings:
 | `LLM_MODEL` | Variable | Model name |
 | `LLM_BASE_URL` | Variable | Custom relay/proxy URL |
 | `LLM_STRUCTURED_OUTPUT` | Variable | OpenRouter Structured Outputs mode, default `auto`; set `off` to force legacy free text |
+| `LLM_PROVIDER_ORDER` | Variable | Comma-separated OpenRouter upstream provider order, default empty (OpenRouter picks) |
 | `EXTERNAL_REPO_GUARD_MAX_REVIEWS` | Variable | Maximum external PR reviews per run, default `3` |
 | `EXTERNAL_REPO_GUARD_SEARCH_LIMIT` | Variable | Maximum search results scanned per run, default `20` |
 
@@ -234,6 +237,21 @@ with:
 The strict schema covers the machine-stable skeleton—risk, recommendation, scores, next action, and inline locations—while complete cascade analysis, finding evidence and fixes, Karpathy review, and Issue rubric details remain full text blocks. Repo Guard publishes the same Markdown sections as before and still accepts V1 deep-schema JSON, tolerant JSON, Markdown, and free text. Structured requests omit `temperature` for OpenRouter parameter compatibility; legacy requests retain `temperature: 0.3`.
 
 Any non-empty first response is kept even if it does not match the schema, so formatting imperfections do not cause another model charge. Only a structured-request error or a response with no usable text triggers one additional legacy free-text call. If that call also returns no usable text, the Action fails explicitly instead of publishing a synthetic medium-risk review, and no third model call is made.
+
+### OpenRouter provider routing
+
+OpenRouter fans a model out to several upstream providers. When one of them rejects Repo Guard's requests, pin the upstreams you trust with `provider-order`:
+
+```yaml
+with:
+  provider: openai
+  model: openai/gpt-5.6-sol
+  api-key: ${{ secrets.LLM_API_KEY }}
+  base-url: https://openrouter.ai/api/v1
+  provider-order: azure
+```
+
+The value is a comma-separated preference list (`azure,openai`) that becomes OpenRouter's `provider.order` on both structured and legacy requests. Entries are OpenRouter provider slugs as listed by `https://openrouter.ai/api/v1/providers`; casing is normalized, and a repeated provider fails the Action immediately instead of sending an ambiguous order. OpenRouter still falls back to other upstreams if every listed one is unavailable; the order only expresses preference. The default is empty, which leaves upstream selection to OpenRouter. Anthropic requests have no equivalent field, so a configured order is ignored there and logged.
 
 ### Private intranet models
 

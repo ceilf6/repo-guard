@@ -47,3 +47,4 @@ jobs:
           api-key: ${{ secrets.LLM_API_KEY }}
           base-url: ${{ vars.LLM_BASE_URL }}
           structured-output: ${{ vars.LLM_STRUCTURED_OUTPUT || 'auto' }}
+          provider-order: ${{ vars.LLM_PROVIDER_ORDER }}

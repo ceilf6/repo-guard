@@ -115,6 +115,87 @@ test('supported OpenRouter model sends strict response format and routing requir
   assertNoOutputTokenLimit(calls[1].body);
 });
 
+test('configured provider order routes the legacy request', async () => {
+  const calls = [];
+  global.fetch = async (url, options) => {
+    calls.push({ url: String(url), body: JSON.parse(options.body) });
+    return jsonResponse({ choices: [{ message: { content: 'azure text' } }] });
+  };
+
+  const result = await chatCompletion(baseCompletionConfig({
+    structuredOutputMode: 'off',
+    providerOrder: ['azure'],
+  }));
+
+  assert.equal(result, 'azure text');
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].body.provider, { order: ['azure'] });
+});
+
+test('configured provider order merges with the structured routing requirement', async () => {
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    const call = { url: String(url) };
+    if (options.body) call.body = JSON.parse(options.body);
+    calls.push(call);
+    if (String(url).includes('/model/')) {
+      return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+    }
+    return jsonResponse({ choices: [{ message: { content: '{"recommendation":"COMMENT"}' } }] });
+  };
+
+  await chatCompletion(baseCompletionConfig({ providerOrder: ['azure', 'openai'] }));
+
+  assert.deepEqual(calls[1].body.provider, {
+    order: ['azure', 'openai'],
+    require_parameters: true,
+  });
+});
+
+test('provider order survives the fallback to the legacy request', async () => {
+  const modelBodies = [];
+  global.fetch = async (url, options = {}) => {
+    if (String(url).includes('/model/')) {
+      return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+    }
+    modelBodies.push(JSON.parse(options.body));
+    if (modelBodies.length === 1) return jsonResponse({ error: { message: 'invalid schema' } }, 400);
+    return jsonResponse({ choices: [{ message: { content: 'legacy fallback' } }] });
+  };
+
+  const result = await chatCompletion(baseCompletionConfig({ providerOrder: ['azure'] }));
+
+  assert.equal(result, 'legacy fallback');
+  assert.deepEqual(modelBodies[0].provider, { order: ['azure'], require_parameters: true });
+  assert.deepEqual(modelBodies[1].provider, { order: ['azure'] });
+  assert.equal('response_format' in modelBodies[1], false);
+});
+
+test('anthropic ignores provider order and warns about it', async () => {
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...values) => warnings.push(values.join(' '));
+  const calls = [];
+  try {
+    global.fetch = async (url, options) => {
+      calls.push({ url: String(url), body: JSON.parse(options.body) });
+      return jsonResponse({ content: [{ text: 'anthropic text' }] });
+    };
+
+    assert.equal(await chatCompletion(baseCompletionConfig({
+      provider: 'anthropic',
+      model: 'claude-test',
+      baseURL: 'https://api.anthropic.com/v1',
+      providerOrder: ['azure'],
+    })), 'anthropic text');
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal('provider' in calls[0].body, false);
+  assert.match(warnings.join('\n'), /provider order ignored/);
+});
+
 test('omitted mode defaults to OpenRouter capability detection', async () => {
   const calls = [];
   global.fetch = async (url, options = {}) => {
