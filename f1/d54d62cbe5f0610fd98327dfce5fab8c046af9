@@ -1,0 +1,27 @@
+README.md
+  s_1435f408b54c31::t_f634732a158d58 214
+scripts/external-dispatcher-logic.mjs
+  s_1435f408b54c31::t_28b9fdefc2f061 3,10
+scripts/review-engine.mjs
+  s_1435f408b54c31::t_690a30632f656a 4-5,9-25
+scripts/review-logic.mjs
+  s_1435f408b54c31::t_3b028e6d64c5a0 12,16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f1d54d62cbe5f0610fd98327dfce5fab8c046af9",
+  "prompts": {},
+  "sessions": {
+    "s_1435f408b54c31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b8e3704-3203-4e5c-b96b-4673729adf57",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
