@@ -34,14 +34,32 @@ jobs:
           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
         )
       )
-    runs-on: ubuntu-latest
+    # REPO_GUARD_RUNNER selects a self-hosted runner label (e.g. repo-guard-claude)
+    # so the claude-code engine can run next to an authenticated Claude Code CLI.
+    runs-on: ${{ vars.REPO_GUARD_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 45
     steps:
+      # The action itself always runs from the default branch so PR code cannot
+      # rewrite the runtime; the PR head is checked out separately as review data.
+      # persist-credentials must stay false: the checkouts double as the
+      # claude-code workspace, and a persisted GITHUB_TOKEN in .git/config would
+      # be readable by the reviewer's Read tool.
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request)
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || format('refs/pull/{0}/head', github.event.issue.number) }}
+          path: pr-head
+          persist-credentials: false
       - uses: ./
         with:
           type: both
+          engine: ${{ vars.REPO_GUARD_ENGINE || 'api' }}
+          workspace: ${{ (github.event_name == 'pull_request' || (github.event_name == 'issue_comment' && github.event.issue.pull_request)) && format('{0}/pr-head', github.workspace) || github.workspace }}
+          claude-model: ${{ vars.CLAUDE_CODE_MODEL }}
           provider: ${{ vars.LLM_PROVIDER || 'anthropic' }}
           model: ${{ vars.LLM_MODEL || 'claude-opus-4-7-thinking' }}
           api-key: ${{ secrets.LLM_API_KEY }}

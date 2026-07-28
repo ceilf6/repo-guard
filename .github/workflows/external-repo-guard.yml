@@ -20,11 +20,16 @@ concurrency:
 
 jobs:
   external-guard:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.EXTERNAL_REPO_GUARD_RUNNER || 'ubuntu-latest' }}
+    # Worst case is EXTERNAL_REPO_GUARD_MAX_REVIEWS (3) claude-code reviews at
+    # 20 minutes each plus search/post overhead; headroom avoids a kill window
+    # between a posted review and its dedup marker.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
       - name: Initialize skills
         shell: bash
         run: |
@@ -36,6 +41,8 @@ jobs:
         shell: bash
         env:
           CEILF6_GITHUB_TOKEN: ${{ secrets.CEILF6_GITHUB_TOKEN }}
+          REVIEW_ENGINE: ${{ vars.EXTERNAL_REPO_GUARD_ENGINE || 'api' }}
+          CLAUDE_CODE_MODEL: ${{ vars.CLAUDE_CODE_MODEL }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'anthropic' }}
           LLM_MODEL: ${{ vars.LLM_MODEL || 'claude-opus-4-7-thinking' }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}

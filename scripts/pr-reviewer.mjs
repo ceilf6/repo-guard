@@ -1,5 +1,5 @@
 // @ts-check
-import { chatCompletion } from './llm-client.mjs';
+import { completeReview } from './review-engine.mjs';
 import { fetchPRInfo, fetchPRDiff, fetchPRLinkedIssues } from './github-api.mjs';
 import { loadSystemPrompt, buildPRUserMessage } from './prompts.mjs';
 import { PR_REVIEW_RESPONSE_FORMAT } from './review-contracts.mjs';
@@ -27,9 +27,11 @@ export async function buildPRReview(config) {
     messages.push({ role: 'user', content: `用户请求: ${config.userPrompt}` });
   }
 
-  const rawResponse = await chatCompletion({
+  const rawResponse = await completeReview({
+    engine: config.engine,
     provider: config.provider,
     model: config.model,
+    claudeModel: config.claudeModel,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutputMode: config.structuredOutput,
@@ -37,6 +39,7 @@ export async function buildPRReview(config) {
     responseFormat: PR_REVIEW_RESPONSE_FORMAT,
     system: systemPrompt,
     messages,
+    workspace: config.workspace,
   });
   const response = normalizeReviewResponse(stripThinkingBlocks(rawResponse), { type: 'pr', title: prInfo.title });
 

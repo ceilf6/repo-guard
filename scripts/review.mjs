@@ -1,12 +1,11 @@
 // @ts-check
-import { chatCompletion } from './llm-client.mjs';
+import { completeReview } from './review-engine.mjs';
 import { fetchIssue, postComment, postPRReview } from './github-api.mjs';
-import { parseProviderOrder } from './openrouter-provider-routing.mjs';
-import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
 import { loadSystemPrompt, buildIssueUserMessage } from './prompts.mjs';
 import { buildPRReview } from './pr-reviewer.mjs';
 import { ISSUE_REVIEW_RESPONSE_FORMAT } from './review-contracts.mjs';
 import {
+  buildReviewConfig,
   extractUserPrompt,
   getReviewNumber,
   isRepoGuardPublishedComment,
@@ -14,37 +13,15 @@ import {
   normalizeReviewResponse,
   resolveReviewType,
   stripThinkingBlocks,
+  validateReviewConfig,
 } from './review-logic.mjs';
 
-const env = process.env;
-
-const config = {
-  type: env.REVIEW_TYPE || 'both',
-  provider: env.LLM_PROVIDER || 'openai',
-  model: env.LLM_MODEL || 'gpt-4o',
-  apiKey: env.LLM_API_KEY,
-  baseURL: env.LLM_BASE_URL || '',
-  structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
-  providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
-  githubToken: env.GITHUB_TOKEN,
-  extraInstructions: env.EXTRA_INSTRUCTIONS || '',
-  prNumber: env.PR_NUMBER,
-  issueNumber: env.ISSUE_NUMBER,
-  repo: env.REPO_FULL_NAME,
-  eventAction: env.EVENT_ACTION,
-  eventName: env.EVENT_NAME,
-  commentBody: env.COMMENT_BODY || '',
-  commentUser: env.COMMENT_USER || '',
-  isPullRequest: env.IS_PULL_REQUEST === 'true',
-};
+const config = buildReviewConfig(process.env);
 
 async function main() {
-  if (!config.apiKey) {
-    console.error('Error: LLM_API_KEY is required');
-    process.exit(1);
-  }
-  if (!config.githubToken) {
-    console.error('Error: GITHUB_TOKEN is required');
+  const configErrors = validateReviewConfig(config);
+  if (configErrors.length > 0) {
+    for (const error of configErrors) console.error(`Error: ${error}`);
     process.exit(1);
   }
 
@@ -68,7 +45,11 @@ async function main() {
   }
 
   console.log(`在 ${config.repo} 上运行 ${reviewType} 评审...`);
-  console.log(`供应商: ${config.provider}, 模型: ${config.model}`);
+  if (config.engine === 'claude-code') {
+    console.log(`引擎: claude-code, 模型: ${config.claudeModel || '(CLI 默认)'}, 工作目录: ${config.workspace || '(无 checkout)'}`);
+  } else {
+    console.log(`供应商: ${config.provider}, 模型: ${config.model}`);
+  }
 
   if (reviewType === 'pr') {
     await reviewPR(getReviewNumber(config, 'pr'));
@@ -87,8 +68,11 @@ async function reviewPR(prNumber) {
     repo: config.repo,
     prNumber,
     githubToken: config.githubToken,
+    engine: config.engine,
     provider: config.provider,
     model: config.model,
+    claudeModel: config.claudeModel,
+    workspace: config.workspace,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutput: config.structuredOutput,
@@ -126,9 +110,11 @@ async function reviewIssue(issueNumber) {
 
   console.log('调用 LLM...');
 
-  const rawResponse = await chatCompletion({
+  const rawResponse = await completeReview({
+    engine: config.engine,
     provider: config.provider,
     model: config.model,
+    claudeModel: config.claudeModel,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutputMode: config.structuredOutput,
@@ -136,6 +122,7 @@ async function reviewIssue(issueNumber) {
     responseFormat: ISSUE_REVIEW_RESPONSE_FORMAT,
     system: systemPrompt,
     messages,
+    workspace: config.workspace,
   });
   const response = normalizeReviewResponse(stripThinkingBlocks(rawResponse), { type: 'issue', title: issue.title });
 

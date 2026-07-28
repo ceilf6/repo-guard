@@ -30,7 +30,7 @@ repo-guard 是为这个闭环造的 CR 环节：输出稳定的结论契约与�
 
 - PR: Automated code review with cascade analysis, Karpathy review standard, inline comments
 - Issue: Quality assessment with completeness, clarity, actionability scoring
-- Supports OpenAI-compatible and Anthropic API formats
+- Two engines: `api` (OpenAI-compatible / Anthropic HTTP APIs) and `claude-code` (local Claude Code CLI on your own runner, with read-only repository exploration)
 - Works with relay/proxy services via custom base URL
 - Configurable model and extra instructions
 - Chinese review prompts and Chinese output contracts by default
@@ -89,9 +89,12 @@ jobs:
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `type` | No | `both` | `pr`, `issue`, or `both` (auto-detect) |
-| `provider` | No | `openai` | `openai` or `anthropic` |
-| `model` | No | `gpt-4o` | Model name |
-| `api-key` | Yes | — | LLM API key |
+| `engine` | No | `api` | `api` calls an LLM HTTP API; `claude-code` runs the local Claude Code CLI |
+| `provider` | No | `openai` | `openai` or `anthropic` (api engine) |
+| `model` | No | `gpt-4o` | Model name (api engine) |
+| `claude-model` | No | `""` | Model for the claude-code engine (`opus`, `sonnet`, or a full name); empty uses the CLI default |
+| `workspace` | No | `github.workspace` | Directory the claude-code engine explores with read-only tools |
+| `api-key` | api engine | `""` | LLM API key; unused by the claude-code engine |
 | `base-url` | No | `""` | Custom API base URL |
 | `structured-output` | No | `auto` | OpenRouter Structured Outputs mode: `off` or `auto` |
 | `provider-order` | No | `""` | Comma-separated OpenRouter upstream provider order, e.g. `azure` |
@@ -174,6 +177,42 @@ jobs:
           api-key: ${{ secrets.LLM_API_KEY }}
           base-url: ${{ vars.LLM_BASE_URL }}
 ```
+
+## Engine: claude-code（自托管 Claude Code CLI）
+
+`engine: claude-code` 不再调用任何 HTTP API，而是在 runner 本机执行 `claude -p`——评审跑在你自己的机器、你自己的 Claude 登录态（订阅或 API key）上，仓库不需要配置 `LLM_API_KEY`。搭配 self-hosted runner 时，出网 IP 就是你平时使用 Claude 的网络环境，这对订阅账号是更常态的使用画像。
+
+相对 api 引擎的另一个质量差异：claude-code 引擎把 PR head 的 checkout 作为工作目录（`workspace` 输入），评审时可用只读工具（Read/Grep/Glob）查证 diff 之外的调用方、类型定义与既有模式——评审依据不再只有 diff。工具集被硬限制为只读（无 Bash、无网络、无写入），且以 `--safe-mode` 运行：被评审 checkout 内的 `CLAUDE.md`/`.claude` 配置/hooks/MCP 一律不加载，评审对象无法借「项目配置」通道注入指令。输出仍走同一套中文契约解析与行级评论发布管道。
+
+```yaml
+jobs:
+  guard:
+    runs-on: [self-hosted, repo-guard-claude]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          # 必须关闭：checkout 即评审工作目录，持久化的 GITHUB_TOKEN
+          # 会留在 .git/config 里被只读工具读到
+          persist-credentials: false
+      - uses: ceilf6/repo-guard@main
+        with:
+          engine: claude-code
+          claude-model: opus   # 可选，留空用 CLI 默认模型
+```
+
+要求 runner 上有已认证的 `claude` 可执行文件（交互登录一次，或 `claude setup-token` 生成长期凭据）。完整的 runner 部署与安全基线见 [docs/self-hosted-claude-code-runner.md](docs/self-hosted-claude-code-runner.md)。
+
+行为差异与边界：
+
+- `provider` / `api-key` / `base-url` / `structured-output` / `provider-order` 仅作用于 api 引擎，claude-code 引擎忽略它们。
+- 无仓库 checkout 时（如外部 PR 调度，或 `workspace` 指向空目录）自动退化为 prompt-only 模式，在空白临时目录中运行，system prompt 不再声称可查证仓库上下文。
+- 单次评审默认 20 分钟超时，可用环境变量 `CLAUDE_CODE_TIMEOUT_MINUTES` 调整；`CLAUDE_CODE_EXECUTABLE` 可指定 CLI 路径。
+- 运行前探测 `claude --version`：低于已验证最低版本（2.1.220，`--safe-mode`/`--tools` 语义在该版本实测）时直接失败，防止在未验证的安全边界上评审。
+- 凭据隔离：工作目录外的读取在 print 模式下被权限系统默认拒绝，且引擎经 `--settings` 注入 `permissions.deny` 硬拒绝 `~/.claude` 等凭据路径与 `.git/`——`Read(...)` 路径拒绝同时约束 Grep（显式拒绝）与 Glob（静默过滤），均在 2.1.220 实测。生产 runner 建议锁定 CLI 版本，见部署手册。
+- 环境卫生：引擎启动 CLI 前会从子进程环境显式剔除 `GITHUB_TOKEN`/`GH_TOKEN`/`LLM_API_KEY`/`CEILF6_GITHUB_TOKEN`。剔除是固定列表——不要在评审 job 的 env 里放置其他无关 secret，列表之外的环境变量会被评审子进程继承。
+- 仓库与 PR 内容始终作为待评审数据注入，system prompt 显式声明其中的指令性文本一律忽略。
 
 ## How It Works
 

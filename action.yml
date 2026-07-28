@@ -9,17 +9,30 @@ inputs:
     description: "Review type: 'pr', 'issue', or 'both' (auto-detect from event)"
     required: false
     default: "both"
+  engine:
+    description: "Review engine: 'api' calls an LLM HTTP API, 'claude-code' runs the local Claude Code CLI (requires a runner with an authenticated `claude` binary, typically self-hosted)"
+    required: false
+    default: "api"
   provider:
-    description: "LLM provider: 'openai' or 'anthropic'"
+    description: "LLM provider for the api engine: 'openai' or 'anthropic'"
     required: false
     default: "openai"
   model:
-    description: "Model name (e.g., gpt-4o, claude-sonnet-4-20250514)"
+    description: "Model name for the api engine (e.g., gpt-4o, claude-sonnet-4-20250514)"
     required: false
     default: "gpt-4o"
+  claude-model:
+    description: "Model for the claude-code engine (alias like 'opus' or a full model name); empty uses the CLI's configured default"
+    required: false
+    default: ""
+  workspace:
+    description: "Directory the claude-code engine explores with read-only tools; point it at a checkout of the PR head for full-repo review context"
+    required: false
+    default: ${{ github.workspace }}
   api-key:
-    description: "API key for the LLM provider"
-    required: true
+    description: "API key for the LLM provider (required for the api engine, unused by claude-code)"
+    required: false
+    default: ""
   base-url:
     description: "Custom API base URL for relay/proxy service"
     required: false
@@ -56,6 +69,9 @@ runs:
       shell: bash
       env:
         REVIEW_TYPE: ${{ inputs.type }}
+        REVIEW_ENGINE: ${{ inputs.engine }}
+        REVIEW_WORKSPACE: ${{ inputs.workspace }}
+        CLAUDE_CODE_MODEL: ${{ inputs.claude-model }}
         LLM_PROVIDER: ${{ inputs.provider }}
         LLM_MODEL: ${{ inputs.model }}
         LLM_API_KEY: ${{ inputs.api-key }}
