@@ -70,7 +70,7 @@ self-hosted runner 会执行仓库 workflow 定义的任意代码,以下不是�
 
 1. **不给不受信任的触发者跑**。保持 workflow 中对 fork PR 与非 OWNER/MEMBER/COLLABORATOR 触发者的门禁(`repo-guard.yml` 已内置);公共仓库同时在 Settings → Actions 里收紧 "Require approval for outside collaborators"。
 2. **checkout 不持久化凭据**。作为 claude-code 工作目录的 `actions/checkout` 步骤必须设 `persist-credentials: false`——默认行为会把 `GITHUB_TOKEN` 写入 `.git/config`,评审进程的只读工具能读到它,注入诱导后可经评审发布管道外泄。system prompt 同时禁止读取 `.git/` 内容作为纵深防御。
-3. **runner 用户的 Claude 凭据(`~/.claude`)有三层防护**,均在 CLI 2.1.220 实测:① print 模式下工作目录外的 Read 被权限系统直接拒绝(尝试会记录在输出 envelope 的 `permission_denials` 中,可审计);② 引擎通过 `--settings` 注入 `permissions.deny` 硬拒绝 `~/.claude`、`~/.claude.json` 等凭据路径与 `./.git/`(deny 规则在 `--safe-mode` 下实测生效);③ system prompt 显式禁止读取凭据路径。
+3. **runner 用户的 Claude 凭据(`~/.claude`)有三层防护**,均在 CLI 2.1.220 实测:① print 模式下工作目录外的 Read 被权限系统直接拒绝(尝试会记录在输出 envelope 的 `permission_denials` 中,可审计);② 引擎通过 `--settings` 注入 `permissions.deny` 硬拒绝 `~/.claude`、`~/.claude.json` 等凭据路径与 `./.git/`(deny 规则在 `--safe-mode` 下实测生效);③ system prompt 显式禁止读取凭据路径。此外 job 环境中的活动凭据(`GITHUB_TOKEN`、`LLM_API_KEY`、`CEILF6_GITHUB_TOKEN`)在启动 CLI 子进程前被显式剔除——即使权限边界失效,子进程环境里也没有可泄露的 token;Claude 自身认证(`~/.claude`、`CLAUDE_CODE_OAUTH_TOKEN`、`ANTHROPIC_API_KEY`)不受影响。
 4. **评审进程只读且不加载被评审仓库的配置**。claude-code 引擎硬限制工具集为 `Read,Grep,Glob`(无 Bash、无写入、无网络工具),并以 `--safe-mode` 运行——被评审 checkout 内的 `CLAUDE.md`、`.claude/settings.json`(含 hooks)、`.mcp.json` 等一律不作为受信配置加载,PR 无法借「项目配置」通道注入评审指令。残余风险:仓库内容仍以待评审数据进入模型上下文,数据层面的诱导依赖 system prompt 边界声明约束,高风险仓库的评审结论应保留人工抽查。
 5. **专用低权限用户**。runner 与 claude 跑在专用系统用户下,该用户不持有 SSH 私钥、云凭据等无关秘密;机器上其他服务(如代理)用不同用户隔离。
 6. **超时与输出兜底**。job 级 `timeout-minutes` 与引擎级 `CLAUDE_CODE_TIMEOUT_MINUTES`(默认 20 分钟)双层限制,防止挂死占住 runner;CLI 输出超过 10MB 会被截杀并报为明确的评审失败,而不是拖垮 runner 内存。

@@ -4,6 +4,7 @@ import { chmodSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  CLAUDE_CODE_ENV_DENYLIST,
   CLAUDE_CODE_PERMISSION_SETTINGS,
   CLAUDE_CODE_READONLY_TOOLS,
   MIN_VERIFIED_CLI_VERSION,
@@ -234,6 +235,48 @@ process.stdin.on('end', () => {
       /exited with code 3.*auth expired/,
     );
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('claudeCodeCompletion strips job credentials from the child environment', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
+  const saved = {};
+  for (const key of CLAUDE_CODE_ENV_DENYLIST) {
+    saved[key] = process.env[key];
+    process.env[key] = `leaked-${key}`;
+  }
+  process.env.KEEP_ME = 'kept';
+  try {
+    const stub = writeStub(dir, `${VERSION_BRANCH}
+process.stdin.resume();
+process.stdin.on('end', () => {
+  process.stdout.write(JSON.stringify({
+    type: 'result',
+    subtype: 'success',
+    is_error: false,
+    result: JSON.stringify({
+      leaked: ['GITHUB_TOKEN', 'GH_TOKEN', 'LLM_API_KEY', 'CEILF6_GITHUB_TOKEN'].filter((k) => k in process.env),
+      kept: process.env.KEEP_ME || '',
+    }),
+  }));
+});
+`);
+    const result = await claudeCodeCompletion({
+      messages: [{ role: 'user', content: '内容' }],
+      workspace: dir,
+      executable: stub,
+      timeoutMinutes: 1,
+    });
+    const echoed = JSON.parse(result);
+    assert.deepEqual(echoed.leaked, []);
+    assert.equal(echoed.kept, 'kept');
+  } finally {
+    for (const key of CLAUDE_CODE_ENV_DENYLIST) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+    delete process.env.KEEP_ME;
     rmSync(dir, { recursive: true, force: true });
   }
 });

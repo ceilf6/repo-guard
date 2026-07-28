@@ -25,6 +25,13 @@ export const CLAUDE_CODE_PERMISSION_SETTINGS = JSON.stringify({
   },
 });
 
+// The review process holds live credentials the CLI never needs (repo-write
+// GitHub tokens, api-engine keys); stripping them from the child environment
+// removes the leak surface instead of relying on the permission system alone.
+// Claude's own auth (~/.claude OAuth, CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY)
+// stays intact.
+export const CLAUDE_CODE_ENV_DENYLIST = ['GITHUB_TOKEN', 'GH_TOKEN', 'LLM_API_KEY', 'CEILF6_GITHUB_TOKEN'];
+
 const DEFAULT_TIMEOUT_MINUTES = 20;
 const MAX_DIAGNOSTIC_CHARS = 400;
 // A misbehaving CLI that streams output for the whole timeout window must fail
@@ -196,8 +203,12 @@ export async function claudeCodeCompletion({
 
 function runClaudeCode({ executable, args, prompt, cwd, timeoutMs, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES }) {
   return new Promise((resolve, reject) => {
+    const childEnv = { ...process.env };
+    for (const key of CLAUDE_CODE_ENV_DENYLIST) delete childEnv[key];
+
     const child = spawn(executable, args, {
       cwd,
+      env: childEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -240,7 +251,8 @@ function runClaudeCode({ executable, args, prompt, cwd, timeoutMs, maxOutputByte
         return;
       }
       if (timedOut) {
-        reject(new Error(`Claude Code timed out after ${timeoutMs / 60_000} minutes`));
+        const detail = boundedDiagnostic(stderr) || boundedDiagnostic(stdout);
+        reject(new Error(`Claude Code timed out after ${timeoutMs / 60_000} minutes${detail ? `: ${detail}` : ''}`));
         return;
       }
       if (spawnError) {
