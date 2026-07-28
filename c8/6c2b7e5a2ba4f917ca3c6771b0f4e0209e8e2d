@@ -1,0 +1,23 @@
+scripts/llm-client.mjs
+  s_7418fab48368a8::t_e1fae0d444a199 43,45,49,67-68,70,74-106,176-178
+tests/llm-client.test.mjs
+  s_7418fab48368a8::t_e1625a2fe30a0d 369-422
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c86c2b7e5a2ba4f917ca3c6771b0f4e0209e8e2d",
+  "prompts": {},
+  "sessions": {
+    "s_7418fab48368a8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5ad0c806-0043-401a-9e52-9dea4f88bf3e",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
