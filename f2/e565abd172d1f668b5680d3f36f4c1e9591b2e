@@ -1,0 +1,31 @@
+README.md
+  s_1435f408b54c31::t_24478370fe05ec 185,207
+docs/self-hosted-claude-code-runner.md
+  s_1435f408b54c31::t_5250cfcca2241b 34,37-38,41-42,70
+scripts/claude-code-client.mjs
+  s_1435f408b54c31::t_62983ed6306625 3,23-25,27,33-46
+scripts/review-engine.mjs
+  s_1435f408b54c31::t_9f843ac36c1c2a 3,21-22,52,55,57
+tests/claude-code-client.test.mjs
+  s_1435f408b54c31::t_e437882077eafe 12,24,30,37-58
+tests/review-engine.test.mjs
+  s_1435f408b54c31::t_1645b015e6b395 82,92-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f2e565abd172d1f668b5680d3f36f4c1e9591b2e",
+  "prompts": {},
+  "sessions": {
+    "s_1435f408b54c31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b8e3704-3203-4e5c-b96b-4673729adf57",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
