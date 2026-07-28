@@ -1,0 +1,27 @@
+.github/workflows/repo-guard.yml
+  s_1435f408b54c31::t_ebc151925b19ec 44-46,50,56
+README.md
+  s_1435f408b54c31::t_ad68bda0b555de 196-198
+docs/self-hosted-claude-code-runner.md
+  s_1435f408b54c31::t_a6718033fbd346 72-75
+scripts/review-engine.mjs
+  s_1435f408b54c31::t_df4b76ce0681f8 22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "87a8241a9e4e12ee8e907bcfea63c9c4f2548d50",
+  "prompts": {},
+  "sessions": {
+    "s_1435f408b54c31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b8e3704-3203-4e5c-b96b-4673729adf57",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
