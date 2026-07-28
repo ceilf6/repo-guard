@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildReviewConfig,
   extractInlineComments,
   extractRecommendation,
   extractUserPrompt,
@@ -11,7 +12,52 @@ import {
   normalizeReviewResponse,
   resolveReviewType,
   stripThinkingBlocks,
+  validateReviewConfig,
 } from '../scripts/review-logic.mjs';
+
+test('buildReviewConfig wires the claude-code engine fields from env', () => {
+  const config = buildReviewConfig({
+    REVIEW_ENGINE: 'claude-code',
+    REVIEW_WORKSPACE: '/srv/pr-head',
+    CLAUDE_CODE_MODEL: 'opus',
+    GITHUB_TOKEN: 'gh-token',
+  });
+  assert.equal(config.engine, 'claude-code');
+  assert.equal(config.workspace, '/srv/pr-head');
+  assert.equal(config.claudeModel, 'opus');
+  assert.equal(config.githubToken, 'gh-token');
+});
+
+test('buildReviewConfig keeps api-engine defaults unchanged', () => {
+  const config = buildReviewConfig({ LLM_API_KEY: 'key', GITHUB_TOKEN: 'gh-token' });
+  assert.equal(config.engine, 'api');
+  assert.equal(config.provider, 'openai');
+  assert.equal(config.model, 'gpt-4o');
+  assert.equal(config.workspace, '');
+  assert.equal(config.claudeModel, '');
+});
+
+test('validateReviewConfig requires an api key only for the api engine', () => {
+  assert.deepEqual(
+    validateReviewConfig(buildReviewConfig({ REVIEW_ENGINE: 'claude-code', GITHUB_TOKEN: 'gh-token' })),
+    [],
+  );
+  assert.deepEqual(
+    validateReviewConfig(buildReviewConfig({ GITHUB_TOKEN: 'gh-token' })),
+    ['LLM_API_KEY is required unless engine is claude-code'],
+  );
+});
+
+test('validateReviewConfig always requires the GitHub token', () => {
+  assert.deepEqual(
+    validateReviewConfig(buildReviewConfig({ REVIEW_ENGINE: 'claude-code' })),
+    ['GITHUB_TOKEN is required'],
+  );
+  assert.deepEqual(validateReviewConfig(buildReviewConfig({})), [
+    'LLM_API_KEY is required unless engine is claude-code',
+    'GITHUB_TOKEN is required',
+  ]);
+});
 
 test('normalizeReviewResponse preserves every canonical PR field', () => {
   const response = JSON.stringify({

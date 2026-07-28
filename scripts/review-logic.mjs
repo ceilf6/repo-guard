@@ -9,6 +9,45 @@ import {
   renderStructuredIssueReviewV2,
   renderStructuredPRReviewV2,
 } from './review-contracts.mjs';
+import { parseReviewEngine } from './review-engine.mjs';
+import { parseProviderOrder } from './openrouter-provider-routing.mjs';
+import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
+
+export function buildReviewConfig(env) {
+  return {
+    type: env.REVIEW_TYPE || 'both',
+    engine: parseReviewEngine(env.REVIEW_ENGINE),
+    provider: env.LLM_PROVIDER || 'openai',
+    model: env.LLM_MODEL || 'gpt-4o',
+    claudeModel: env.CLAUDE_CODE_MODEL || '',
+    workspace: env.REVIEW_WORKSPACE || '',
+    apiKey: env.LLM_API_KEY,
+    baseURL: env.LLM_BASE_URL || '',
+    structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
+    providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
+    githubToken: env.GITHUB_TOKEN,
+    extraInstructions: env.EXTRA_INSTRUCTIONS || '',
+    prNumber: env.PR_NUMBER,
+    issueNumber: env.ISSUE_NUMBER,
+    repo: env.REPO_FULL_NAME,
+    eventAction: env.EVENT_ACTION,
+    eventName: env.EVENT_NAME,
+    commentBody: env.COMMENT_BODY || '',
+    commentUser: env.COMMENT_USER || '',
+    isPullRequest: env.IS_PULL_REQUEST === 'true',
+  };
+}
+
+export function validateReviewConfig(config) {
+  const errors = [];
+  if (config.engine !== 'claude-code' && !config.apiKey) {
+    errors.push('LLM_API_KEY is required unless engine is claude-code');
+  }
+  if (!config.githubToken) {
+    errors.push('GITHUB_TOKEN is required');
+  }
+  return errors;
+}
 
 const TRIGGER_PATTERNS = [/@ceilf6\/repo-guard/i, /\/review/i];
 

@@ -1,12 +1,11 @@
 // @ts-check
-import { completeReview, parseReviewEngine } from './review-engine.mjs';
+import { completeReview } from './review-engine.mjs';
 import { fetchIssue, postComment, postPRReview } from './github-api.mjs';
-import { parseProviderOrder } from './openrouter-provider-routing.mjs';
-import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
 import { loadSystemPrompt, buildIssueUserMessage } from './prompts.mjs';
 import { buildPRReview } from './pr-reviewer.mjs';
 import { ISSUE_REVIEW_RESPONSE_FORMAT } from './review-contracts.mjs';
 import {
+  buildReviewConfig,
   extractUserPrompt,
   getReviewNumber,
   isRepoGuardPublishedComment,
@@ -14,40 +13,15 @@ import {
   normalizeReviewResponse,
   resolveReviewType,
   stripThinkingBlocks,
+  validateReviewConfig,
 } from './review-logic.mjs';
 
-const env = process.env;
-
-const config = {
-  type: env.REVIEW_TYPE || 'both',
-  engine: parseReviewEngine(env.REVIEW_ENGINE),
-  provider: env.LLM_PROVIDER || 'openai',
-  model: env.LLM_MODEL || 'gpt-4o',
-  claudeModel: env.CLAUDE_CODE_MODEL || '',
-  workspace: env.REVIEW_WORKSPACE || '',
-  apiKey: env.LLM_API_KEY,
-  baseURL: env.LLM_BASE_URL || '',
-  structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
-  providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
-  githubToken: env.GITHUB_TOKEN,
-  extraInstructions: env.EXTRA_INSTRUCTIONS || '',
-  prNumber: env.PR_NUMBER,
-  issueNumber: env.ISSUE_NUMBER,
-  repo: env.REPO_FULL_NAME,
-  eventAction: env.EVENT_ACTION,
-  eventName: env.EVENT_NAME,
-  commentBody: env.COMMENT_BODY || '',
-  commentUser: env.COMMENT_USER || '',
-  isPullRequest: env.IS_PULL_REQUEST === 'true',
-};
+const config = buildReviewConfig(process.env);
 
 async function main() {
-  if (config.engine !== 'claude-code' && !config.apiKey) {
-    console.error('Error: LLM_API_KEY is required unless engine is claude-code');
-    process.exit(1);
-  }
-  if (!config.githubToken) {
-    console.error('Error: GITHUB_TOKEN is required');
+  const configErrors = validateReviewConfig(config);
+  if (configErrors.length > 0) {
+    for (const error of configErrors) console.error(`Error: ${error}`);
     process.exit(1);
   }
 

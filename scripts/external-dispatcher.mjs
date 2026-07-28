@@ -1,46 +1,21 @@
 // @ts-check
 import { listIssueComments, postComment, searchIssuesAndPullRequests } from './github-api.mjs';
-import { parseReviewEngine } from './review-engine.mjs';
-import { parseProviderOrder } from './openrouter-provider-routing.mjs';
-import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
 import { buildPRReview } from './pr-reviewer.mjs';
 import {
-  DEFAULT_EXTERNAL_ACTOR,
-  DEFAULT_EXTERNAL_TRIGGER,
+  buildExternalDispatcherConfig,
   candidateFromSearchItem,
   externalMarker,
   extractExternalUserPrompt,
-  parseMaxReviews,
   selectUnprocessedTrigger,
+  validateExternalDispatcherConfig,
 } from './external-dispatcher-logic.mjs';
 
-const env = process.env;
-
-const config = {
-  githubToken: env.CEILF6_GITHUB_TOKEN,
-  engine: parseReviewEngine(env.REVIEW_ENGINE),
-  provider: env.LLM_PROVIDER || 'openai',
-  model: env.LLM_MODEL || 'gpt-4o',
-  claudeModel: env.CLAUDE_CODE_MODEL || '',
-  apiKey: env.LLM_API_KEY,
-  baseURL: env.LLM_BASE_URL || '',
-  structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
-  providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
-  extraInstructions: env.EXTRA_INSTRUCTIONS || '',
-  trigger: env.EXTERNAL_REPO_GUARD_TRIGGER || DEFAULT_EXTERNAL_TRIGGER,
-  actor: env.EXTERNAL_REPO_GUARD_TRIGGER_ACTOR || DEFAULT_EXTERNAL_ACTOR,
-  maxReviews: parseMaxReviews(env.EXTERNAL_REPO_GUARD_MAX_REVIEWS, 3),
-  searchLimit: parseMaxReviews(env.EXTERNAL_REPO_GUARD_SEARCH_LIMIT, 20, 'EXTERNAL_REPO_GUARD_SEARCH_LIMIT'),
-  searchQuery: env.EXTERNAL_REPO_GUARD_SEARCH_QUERY || `"${DEFAULT_EXTERNAL_TRIGGER}" is:pr is:open is:public`,
-  dryRun: /^(1|true|yes)$/i.test(env.DRY_RUN || ''),
-};
+const config = buildExternalDispatcherConfig(process.env);
 
 async function main() {
-  if (!config.githubToken) {
-    throw new Error('CEILF6_GITHUB_TOKEN is required');
-  }
-  if (!config.dryRun && config.engine !== 'claude-code' && !config.apiKey) {
-    throw new Error('LLM_API_KEY is required unless DRY_RUN=true or engine is claude-code');
+  const configErrors = validateExternalDispatcherConfig(config);
+  if (configErrors.length > 0) {
+    throw new Error(configErrors.join('; '));
   }
 
   const items = await searchIssuesAndPullRequests(config.searchQuery, config.githubToken, {
@@ -79,9 +54,7 @@ async function main() {
         provider: config.provider,
         model: config.model,
         claudeModel: config.claudeModel,
-        // External repository code is never checked out, so claude-code runs
-        // prompt-only from a scratch directory.
-        workspace: '',
+        workspace: config.workspace,
         apiKey: config.apiKey,
         baseURL: config.baseURL,
         structuredOutput: config.structuredOutput,

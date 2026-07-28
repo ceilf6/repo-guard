@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildExternalDispatcherConfig,
   candidateFromSearchItem,
   externalMarker,
   extractExternalUserPrompt,
@@ -8,7 +9,45 @@ import {
   isExternalTriggerComment,
   parseMaxReviews,
   selectUnprocessedTrigger,
+  validateExternalDispatcherConfig,
 } from '../scripts/external-dispatcher-logic.mjs';
+
+test('buildExternalDispatcherConfig keeps claude-code prompt-only regardless of env', () => {
+  const config = buildExternalDispatcherConfig({
+    CEILF6_GITHUB_TOKEN: 'gh-token',
+    REVIEW_ENGINE: 'claude-code',
+    CLAUDE_CODE_MODEL: 'opus',
+    REVIEW_WORKSPACE: '/srv/should-be-ignored',
+  });
+  assert.equal(config.engine, 'claude-code');
+  assert.equal(config.claudeModel, 'opus');
+  assert.equal(config.workspace, '');
+});
+
+test('validateExternalDispatcherConfig requires an api key only for non-dry-run api engine', () => {
+  assert.deepEqual(
+    validateExternalDispatcherConfig(buildExternalDispatcherConfig({
+      CEILF6_GITHUB_TOKEN: 'gh-token',
+      REVIEW_ENGINE: 'claude-code',
+    })),
+    [],
+  );
+  assert.deepEqual(
+    validateExternalDispatcherConfig(buildExternalDispatcherConfig({
+      CEILF6_GITHUB_TOKEN: 'gh-token',
+      DRY_RUN: 'true',
+    })),
+    [],
+  );
+  assert.deepEqual(
+    validateExternalDispatcherConfig(buildExternalDispatcherConfig({ CEILF6_GITHUB_TOKEN: 'gh-token' })),
+    ['LLM_API_KEY is required unless DRY_RUN=true or engine is claude-code'],
+  );
+  assert.deepEqual(
+    validateExternalDispatcherConfig(buildExternalDispatcherConfig({ REVIEW_ENGINE: 'claude-code' })),
+    ['CEILF6_GITHUB_TOKEN is required'],
+  );
+});
 
 test('external markers are stable and detectable in prior comments', () => {
   assert.equal(externalMarker(12345), '<!-- repo-guard external trigger:12345 -->');

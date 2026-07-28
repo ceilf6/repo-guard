@@ -49,6 +49,10 @@ test('completeReview routes claude-code through the CLI with the workspace instr
   try {
     const stub = join(dir, 'claude-stub.mjs');
     writeFileSync(stub, `#!/usr/bin/env node
+if (process.argv.includes('--version')) {
+  process.stdout.write('2.1.220 (Claude Code)');
+  process.exit(0);
+}
 let input = '';
 process.stdin.on('data', (chunk) => { input += chunk; });
 process.stdin.on('end', () => {
@@ -97,6 +101,10 @@ test('completeReview downgrades an empty workspace to prompt-only mode', async (
   try {
     const stub = join(stubDir, 'claude-stub.mjs');
     writeFileSync(stub, `#!/usr/bin/env node
+if (process.argv.includes('--version')) {
+  process.stdout.write('2.1.220 (Claude Code)');
+  process.exit(0);
+}
 let input = '';
 process.stdin.on('data', (chunk) => { input += chunk; });
 process.stdin.on('end', () => {

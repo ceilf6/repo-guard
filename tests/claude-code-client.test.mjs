@@ -5,12 +5,32 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   CLAUDE_CODE_READONLY_TOOLS,
+  MIN_VERIFIED_CLI_VERSION,
   buildClaudeCodeArgs,
   claudeCodeCompletion,
+  isClaudeCodeVersionSupported,
   parseClaudeCodeOutput,
   parseClaudeCodeTimeoutMinutes,
+  parseClaudeCodeVersion,
   resolveClaudeCodeWorkspace,
 } from '../scripts/claude-code-client.mjs';
+
+test('parseClaudeCodeVersion extracts the semver triple from --version output', () => {
+  assert.equal(parseClaudeCodeVersion('2.1.220 (Claude Code)'), '2.1.220');
+  assert.equal(parseClaudeCodeVersion('  3.0.1\n'), '3.0.1');
+  assert.equal(parseClaudeCodeVersion('no version here'), '');
+  assert.equal(parseClaudeCodeVersion(undefined), '');
+});
+
+test('isClaudeCodeVersionSupported compares against the verified minimum', () => {
+  assert.equal(isClaudeCodeVersionSupported(MIN_VERIFIED_CLI_VERSION), true);
+  assert.equal(isClaudeCodeVersionSupported('2.1.221'), true);
+  assert.equal(isClaudeCodeVersionSupported('2.2.0'), true);
+  assert.equal(isClaudeCodeVersionSupported('3.0.0'), true);
+  assert.equal(isClaudeCodeVersionSupported('2.1.219'), false);
+  assert.equal(isClaudeCodeVersionSupported('2.0.999'), false);
+  assert.equal(isClaudeCodeVersionSupported('1.9.9'), false);
+});
 
 test('parseClaudeCodeTimeoutMinutes defaults and validates', () => {
   assert.equal(parseClaudeCodeTimeoutMinutes(undefined), 20);
@@ -104,7 +124,14 @@ function writeStub(dir, body) {
   return stub;
 }
 
-const ECHO_STUB = `
+const VERSION_BRANCH = `
+if (process.argv.includes('--version')) {
+  process.stdout.write('2.1.220 (Claude Code)');
+  process.exit(0);
+}
+`;
+
+const ECHO_STUB = `${VERSION_BRANCH}
 let input = '';
 process.stdin.on('data', (chunk) => { input += chunk; });
 process.stdin.on('end', () => {
@@ -180,7 +207,7 @@ test('claudeCodeCompletion rejects an empty prompt before spawning', async () =>
 test('claudeCodeCompletion surfaces nonzero exit with bounded stderr', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
   try {
-    const stub = writeStub(dir, `
+    const stub = writeStub(dir, `${VERSION_BRANCH}
 process.stdin.resume();
 process.stdin.on('end', () => {
   process.stderr.write('auth expired');
@@ -204,7 +231,8 @@ process.stdin.on('end', () => {
 test('claudeCodeCompletion kills the process on timeout', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
   try {
-    const stub = writeStub(dir, 'setTimeout(() => {}, 60000);');
+    const stub = writeStub(dir, `${VERSION_BRANCH}
+setTimeout(() => {}, 60000);`);
     await assert.rejects(
       claudeCodeCompletion({
         messages: [{ role: 'user', content: '内容' }],
@@ -213,6 +241,30 @@ test('claudeCodeCompletion kills the process on timeout', async () => {
         timeoutMinutes: 0.002,
       }),
       /timed out after 0.002 minutes/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('claudeCodeCompletion fails fast on a CLI older than the verified minimum', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'repo-guard-test-'));
+  try {
+    const stub = writeStub(dir, `
+if (process.argv.includes('--version')) {
+  process.stdout.write('2.0.0 (Claude Code)');
+  process.exit(0);
+}
+process.stdin.resume();
+`);
+    await assert.rejects(
+      claudeCodeCompletion({
+        messages: [{ role: 'user', content: '内容' }],
+        workspace: dir,
+        executable: stub,
+        timeoutMinutes: 1,
+      }),
+      /2\.0\.0 is older than the verified minimum/,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

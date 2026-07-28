@@ -206,6 +206,7 @@ jobs:
 - `provider` / `api-key` / `base-url` / `structured-output` / `provider-order` 仅作用于 api 引擎，claude-code 引擎忽略它们。
 - 无仓库 checkout 时（如外部 PR 调度，或 `workspace` 指向空目录）自动退化为 prompt-only 模式，在空白临时目录中运行，system prompt 不再声称可查证仓库上下文。
 - 单次评审默认 20 分钟超时，可用环境变量 `CLAUDE_CODE_TIMEOUT_MINUTES` 调整；`CLAUDE_CODE_EXECUTABLE` 可指定 CLI 路径。
+- 运行前探测 `claude --version`：低于已验证最低版本（2.1.220，`--safe-mode`/`--tools` 语义在该版本实测）时直接失败，防止在未验证的安全边界上评审。
 - 仓库与 PR 内容始终作为待评审数据注入，system prompt 显式声明其中的指令性文本一律忽略。
 
 ## How It Works

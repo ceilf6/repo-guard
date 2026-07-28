@@ -40,6 +40,8 @@ echo "回复 ok" | claude -p --output-format json --no-session-persistence \
 
 预期输出为单个 JSON 对象,含 `"is_error":false`、`"subtype":"success"` 与非空 `"result"` 字段。已验证的最低 CLI 版本:**2.1.220**(该版本实测通过完整参数集、JSON envelope 契约,以及 `--safe-mode` 对 cwd 内恶意 `CLAUDE.md` 的注入隔离探针)。
 
+引擎每次运行前会探测 `claude --version`:低于已验证最低版本直接失败(避免在未验证的安全语义上运行),探测本身失败只告警不阻断。CLI 自动升级到更高版本时保持放行,升级后建议重跑一次上面的冒烟命令。
+
 ## 注册 runner
 
 个人账号的 runner 是 **per-repo** 的:每个要用 claude-code 引擎的仓库都要注册一个 runner 实例(同一台机器可以并存多个实例,各占一个目录);org 账号可用 org-level runner 共享。

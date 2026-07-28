@@ -11,6 +11,61 @@ export const CLAUDE_CODE_READONLY_TOOLS = 'Read,Grep,Glob';
 const DEFAULT_TIMEOUT_MINUTES = 20;
 const MAX_DIAGNOSTIC_CHARS = 400;
 
+// Injection isolation rests entirely on --safe-mode/--tools semantics, which
+// are only verified against a known CLI version. Anything older fails fast
+// instead of running with an unverified security boundary.
+export const MIN_VERIFIED_CLI_VERSION = '2.1.220';
+
+export function parseClaudeCodeVersion(output) {
+  const match = String(output ?? '').match(/\d+\.\d+\.\d+/);
+  return match ? match[0] : '';
+}
+
+export function isClaudeCodeVersionSupported(version, minimum = MIN_VERIFIED_CLI_VERSION) {
+  const actual = String(version).split('.').map(Number);
+  const required = String(minimum).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (actual[i] !== required[i]) return actual[i] > required[i];
+  }
+  return true;
+}
+
+const cliVersionChecks = new Map();
+
+function ensureVerifiedCliVersion(executable) {
+  if (!cliVersionChecks.has(executable)) {
+    cliVersionChecks.set(executable, verifyCliVersion(executable));
+  }
+  return cliVersionChecks.get(executable);
+}
+
+async function verifyCliVersion(executable) {
+  let output;
+  try {
+    output = await runClaudeCode({
+      executable,
+      args: ['--version'],
+      prompt: '',
+      cwd: tmpdir(),
+      timeoutMs: 30_000,
+    });
+  } catch (err) {
+    // An unlaunchable executable fails the review run itself with a clearer
+    // error than the probe could give; a flaky probe must not block reviews.
+    console.warn(`Claude Code version probe failed (${err.message}); skipping the version guard`);
+    return;
+  }
+  const version = parseClaudeCodeVersion(output);
+  if (!version) {
+    console.warn(`Claude Code version probe returned no parsable version; skipping the version guard: ${boundedDiagnostic(output)}`);
+    return;
+  }
+  if (!isClaudeCodeVersionSupported(version)) {
+    throw new Error(`Claude Code CLI ${version} is older than the verified minimum ${MIN_VERIFIED_CLI_VERSION}; --safe-mode/--tools semantics are unverified there, upgrade the CLI`);
+  }
+  console.log(`Claude Code CLI ${version} (verified minimum ${MIN_VERIFIED_CLI_VERSION})`);
+}
+
 export function parseClaudeCodeTimeoutMinutes(value, fallback = DEFAULT_TIMEOUT_MINUTES) {
   if (value === undefined || value === null || String(value).trim() === '') return fallback;
   const minutes = Number(value);
@@ -89,6 +144,8 @@ export async function claudeCodeCompletion({
   if (prompt.trim() === '') {
     throw new Error('Claude Code received an empty prompt');
   }
+
+  await ensureVerifiedCliVersion(executable);
 
   // Without a checkout the CLI still needs a working directory it can trust;
   // an empty scratch directory keeps it away from whatever cwd the caller has.
