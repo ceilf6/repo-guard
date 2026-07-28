@@ -1,0 +1,31 @@
+.github/workflows/external-repo-guard.yml
+  s_1435f408b54c31::t_21047ddea83e07 29
+README.md
+  s_1435f408b54c31::t_f0aff97a30a946 213
+docs/self-hosted-claude-code-runner.md
+  s_1435f408b54c31::t_e0610d41bd5e83 73-83
+scripts/claude-code-client.mjs
+  s_1435f408b54c31::t_31d595ab28989e 11-27,30-32,102-109,162,188,196,206,214-226,231-234
+scripts/review-engine.mjs
+  s_1435f408b54c31::t_d603af554d1773 22
+tests/claude-code-client.test.mjs
+  s_1435f408b54c31::t_3a0ef4844b8b76 7,19-26,61,241-263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a009a90160b6a3baa1a4e241826ca3c967afd3e3",
+  "prompts": {},
+  "sessions": {
+    "s_1435f408b54c31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b8e3704-3203-4e5c-b96b-4673729adf57",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
