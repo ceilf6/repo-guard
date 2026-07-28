@@ -193,6 +193,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          # 必须关闭：checkout 即评审工作目录，持久化的 GITHUB_TOKEN
+          # 会留在 .git/config 里被只读工具读到
+          persist-credentials: false
       - uses: ceilf6/repo-guard@main
         with:
           engine: claude-code
