@@ -342,7 +342,7 @@ test('missing or blank structured content falls back once', async () => {
   }
 });
 
-test('fallback failure preserves statuses without leaking provider response bodies', async () => {
+test('fallback failure preserves both statuses and their provider messages', async () => {
   let modelCalls = 0;
   global.fetch = async (url) => {
     if (String(url).includes('/model/')) {
@@ -350,17 +350,86 @@ test('fallback failure preserves statuses without leaking provider response bodi
     }
     modelCalls += 1;
     return modelCalls === 1
-      ? jsonResponse({ error: { message: 'sentinel-structured-response-body' } }, 400)
-      : jsonResponse({ error: { message: 'sentinel-legacy-response-body' } }, 401);
+      ? jsonResponse({ error: { message: 'schema unsupported' } }, 400)
+      : jsonResponse({ error: { message: 'User not found.' } }, 401);
   };
 
   await assert.rejects(
     chatCompletion(baseCompletionConfig()),
     (error) => {
-      assert.match(error.message, /HTTP 401/);
-      assert.match(error.cause.message, /HTTP 400/);
-      assert.doesNotMatch(error.message, /sentinel-legacy-response-body/);
-      assert.doesNotMatch(error.cause.message, /sentinel-structured-response-body/);
+      assert.match(error.message, /HTTP 401 \(message=User not found\.\)/);
+      assert.match(error.cause.message, /HTTP 400 \(message=schema unsupported\)/);
+      return true;
+    },
+  );
+});
+
+test('rejections name the provider error classifiers and message', async () => {
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...values) => warnings.push(values.join(' '));
+  try {
+    global.fetch = async (url) => {
+      if (String(url).includes('/model/')) {
+        return jsonResponse({ data: { supported_parameters: ['structured_outputs'] } });
+      }
+      return jsonResponse({
+        error: {
+          code: 403,
+          message: 'Prompt blocked by guardrail',
+          metadata: {
+            error_type: 'guardrail_blocked',
+            provider_name: 'Azure',
+            provider_code: 'content_filter',
+          },
+        },
+      }, 403);
+    };
+
+    await assert.rejects(
+      chatCompletion(baseCompletionConfig()),
+      (error) => {
+        assert.match(
+          error.message,
+          /HTTP 403 \(error_type=guardrail_blocked, provider=Azure, provider_code=content_filter, message=Prompt blocked by guardrail\)/,
+        );
+        return true;
+      },
+    );
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.match(warnings.join('\n'), /structured output failed: HTTP 403 \(error_type=guardrail_blocked/);
+});
+
+test('surfaced provider messages are single-lined, redacted, and length bounded', async () => {
+  const message = `leaked Bearer sk-or-v1-abcdef0123456789 and\nsk-live-9876543210fedcba while ${'x'.repeat(300)}`;
+  global.fetch = async () => jsonResponse({ error: { message } }, 400);
+
+  await assert.rejects(
+    chatCompletion(baseCompletionConfig({ structuredOutputMode: 'off' })),
+    (error) => {
+      assert.doesNotMatch(error.message, /sk-or-v1-abcdef0123456789|sk-live-9876543210fedcba/);
+      assert.match(error.message, /message=leaked \[redacted\] and \[redacted\] while x+…\(truncated\)/);
+      assert.equal(error.message.includes('\n'), false);
+      assert.ok(error.message.length < 260, `unbounded detail: ${error.message.length} chars`);
+      return true;
+    },
+  );
+});
+
+test('rejections describe a non-JSON error body by shape instead of content', async () => {
+  global.fetch = async () => new Response('<html>sentinel-cloudflare-block</html>', {
+    status: 403,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
+
+  await assert.rejects(
+    chatCompletion(baseCompletionConfig({ structuredOutputMode: 'off' })),
+    (error) => {
+      assert.match(error.message, /HTTP 403 \(non-JSON body: content_type=text\/html, body_chars=38\)/);
+      assert.doesNotMatch(error.message, /sentinel-cloudflare-block/);
       return true;
     },
   );
@@ -434,7 +503,7 @@ test('structured and legacy empty content fails without a third model call', asy
   assert.equal(modelCalls, 2);
 });
 
-test('structured failures log only safe response diagnostics', async () => {
+test('structured failures log the provider message but never the key or prompt', async () => {
   const warnings = [];
   const originalWarn = console.warn;
   console.warn = (...values) => warnings.push(values.join(' '));
@@ -446,7 +515,7 @@ test('structured failures log only safe response diagnostics', async () => {
       }
       modelCalls += 1;
       if (modelCalls === 1) {
-        return jsonResponse({ error: { message: 'schema rejected sentinel-response-content' } }, 400);
+        return jsonResponse({ error: { message: 'schema rejected' } }, 400);
       }
       return jsonResponse({ choices: [{ message: { content: 'legacy fallback' } }] });
     };
@@ -459,8 +528,8 @@ test('structured failures log only safe response diagnostics', async () => {
     console.warn = originalWarn;
   }
 
-  assert.match(warnings.join('\n'), /structured output failed: HTTP 400/);
-  assert.doesNotMatch(warnings.join('\n'), /sentinel-api-key|sentinel-prompt|sentinel-response-content/);
+  assert.match(warnings.join('\n'), /structured output failed: HTTP 400 \(message=schema rejected\)/);
+  assert.doesNotMatch(warnings.join('\n'), /sentinel-api-key|sentinel-prompt/);
 });
 
 test('empty responses log finish and token metadata without model text', async () => {

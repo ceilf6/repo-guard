@@ -40,13 +40,13 @@ async function fetchWithRetry(url, options, retries = 2) {
     try {
       const res = await fetch(url, options);
       if (res.ok) return res;
-      await res.text();
+      const detail = await safeErrorDetail(res);
       if (res.status >= 500 && attempt < retries) {
-        lastError = httpError(res.status);
+        lastError = httpError(res.status, detail);
         await sleep(1000 * 2 ** attempt);
         continue;
       }
-      throw httpError(res.status);
+      throw httpError(res.status, detail);
     } catch (err) {
       if (err.message?.startsWith('HTTP')) throw err;
       if (attempt < retries) {
@@ -64,10 +64,64 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function httpError(status) {
-  const error = new Error(`HTTP ${status}`);
+function httpError(status, detail = '') {
+  const error = new Error(detail ? `HTTP ${status} (${detail})` : `HTTP ${status}`);
   error.status = status;
+  if (detail) error.detail = detail;
   return error;
+}
+
+const MAX_ERROR_MESSAGE_CHARS = 200;
+// `Bearer <token>` is matched before bare tokens so the scheme prefix is
+// redacted with the credential instead of being left behind as a hint.
+const SECRET_PATTERNS = [
+  /\bBearer\s+[A-Za-z0-9._-]{8,}/gi,
+  /\bsk-[A-Za-z0-9._-]{8,}/g,
+];
+
+// Failed requests are diagnosed from the rejection alone, so a rejected review
+// must say why. Providers only populate the classifier fields for pass-through
+// and guardrail errors, so `error.message` is included too — bounded, since a
+// relay may echo the request into it and Actions logs are readable by anyone
+// who can read the repository. A non-JSON body (relay HTML, edge block) is
+// described by shape instead of content.
+async function safeErrorDetail(response) {
+  let body;
+  try {
+    body = await response.text();
+  } catch {
+    return '';
+  }
+
+  let error;
+  try {
+    error = JSON.parse(body)?.error;
+  } catch {
+    const contentType = response.headers?.get?.('content-type') || 'unknown';
+    return `non-JSON body: content_type=${contentType.split(';')[0]}, body_chars=${body.length}`;
+  }
+
+  const fields = [];
+  for (const [label, value] of [
+    ['error_type', error?.metadata?.error_type],
+    ['provider', error?.metadata?.provider_name],
+    ['provider_code', error?.metadata?.provider_code],
+    ['message', boundedErrorMessage(error?.message)],
+  ]) {
+    if (typeof value === 'string' && value.trim() !== '') fields.push(`${label}=${value.trim()}`);
+  }
+  return fields.length > 0 ? fields.join(', ') : `body_chars=${body.length}`;
+}
+
+function boundedErrorMessage(message) {
+  if (typeof message !== 'string') return '';
+  let redacted = message.replace(/\s+/g, ' ').trim();
+  for (const pattern of SECRET_PATTERNS) {
+    redacted = redacted.replace(pattern, '[redacted]');
+  }
+  return redacted.length > MAX_ERROR_MESSAGE_CHARS
+    ? `${redacted.slice(0, MAX_ERROR_MESSAGE_CHARS)}…(truncated)`
+    : redacted;
 }
 
 function buildOpenAIRequest(model, messages, system, { temperature = true } = {}) {
@@ -139,7 +193,9 @@ function responseDiagnostics(response) {
 }
 
 function safeErrorLabel(error) {
-  if (Number.isInteger(error?.status)) return `HTTP ${error.status}`;
+  if (Number.isInteger(error?.status)) {
+    return error.detail ? `HTTP ${error.status} (${error.detail})` : `HTTP ${error.status}`;
+  }
   return error?.name || 'Error';
 }
 
