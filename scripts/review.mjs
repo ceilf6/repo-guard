@@ -1,5 +1,5 @@
 // @ts-check
-import { chatCompletion } from './llm-client.mjs';
+import { completeReview, parseReviewEngine } from './review-engine.mjs';
 import { fetchIssue, postComment, postPRReview } from './github-api.mjs';
 import { parseProviderOrder } from './openrouter-provider-routing.mjs';
 import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
@@ -20,8 +20,11 @@ const env = process.env;
 
 const config = {
   type: env.REVIEW_TYPE || 'both',
+  engine: parseReviewEngine(env.REVIEW_ENGINE),
   provider: env.LLM_PROVIDER || 'openai',
   model: env.LLM_MODEL || 'gpt-4o',
+  claudeModel: env.CLAUDE_CODE_MODEL || '',
+  workspace: env.REVIEW_WORKSPACE || '',
   apiKey: env.LLM_API_KEY,
   baseURL: env.LLM_BASE_URL || '',
   structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
@@ -39,8 +42,8 @@ const config = {
 };
 
 async function main() {
-  if (!config.apiKey) {
-    console.error('Error: LLM_API_KEY is required');
+  if (config.engine !== 'claude-code' && !config.apiKey) {
+    console.error('Error: LLM_API_KEY is required unless engine is claude-code');
     process.exit(1);
   }
   if (!config.githubToken) {
@@ -68,7 +71,11 @@ async function main() {
   }
 
   console.log(`在 ${config.repo} 上运行 ${reviewType} 评审...`);
-  console.log(`供应商: ${config.provider}, 模型: ${config.model}`);
+  if (config.engine === 'claude-code') {
+    console.log(`引擎: claude-code, 模型: ${config.claudeModel || '(CLI 默认)'}, 工作目录: ${config.workspace || '(无 checkout)'}`);
+  } else {
+    console.log(`供应商: ${config.provider}, 模型: ${config.model}`);
+  }
 
   if (reviewType === 'pr') {
     await reviewPR(getReviewNumber(config, 'pr'));
@@ -87,8 +94,11 @@ async function reviewPR(prNumber) {
     repo: config.repo,
     prNumber,
     githubToken: config.githubToken,
+    engine: config.engine,
     provider: config.provider,
     model: config.model,
+    claudeModel: config.claudeModel,
+    workspace: config.workspace,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutput: config.structuredOutput,
@@ -126,9 +136,11 @@ async function reviewIssue(issueNumber) {
 
   console.log('调用 LLM...');
 
-  const rawResponse = await chatCompletion({
+  const rawResponse = await completeReview({
+    engine: config.engine,
     provider: config.provider,
     model: config.model,
+    claudeModel: config.claudeModel,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutputMode: config.structuredOutput,
@@ -136,6 +148,7 @@ async function reviewIssue(issueNumber) {
     responseFormat: ISSUE_REVIEW_RESPONSE_FORMAT,
     system: systemPrompt,
     messages,
+    workspace: config.workspace,
   });
   const response = normalizeReviewResponse(stripThinkingBlocks(rawResponse), { type: 'issue', title: issue.title });
 
