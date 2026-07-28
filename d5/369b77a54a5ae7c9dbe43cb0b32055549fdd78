@@ -1,0 +1,23 @@
+scripts/claude-code-client.mjs
+  s_1435f408b54c31::t_7c654c1de12b99 164,178,184,201-206,216-219,222,224,227-228,233-234
+tests/claude-code-client.test.mjs
+  s_1435f408b54c31::t_6a432b9076683a 241-268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d5369b77a54a5ae7c9dbe43cb0b32055549fdd78",
+  "prompts": {},
+  "sessions": {
+    "s_1435f408b54c31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7b8e3704-3203-4e5c-b96b-4673729adf57",
+        "model": "unknown"
+      },
+      "human_author": "wangjinghong.ceilf6 <wangjinghong.ceilf6@bytedance.com>"
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
