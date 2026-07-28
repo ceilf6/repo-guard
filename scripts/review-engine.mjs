@@ -1,6 +1,6 @@
 // @ts-check
 import { chatCompletion } from './llm-client.mjs';
-import { claudeCodeCompletion, resolveClaudeCodeWorkspace } from './claude-code-client.mjs';
+import { claudeCodeCompletion } from './claude-code-client.mjs';
 
 export const REVIEW_ENGINES = ['api', 'claude-code'];
 
@@ -50,12 +50,14 @@ export async function completeReview({
   workspace,
 }) {
   if (parseReviewEngine(engine) === 'claude-code') {
-    const effectiveWorkspace = resolveClaudeCodeWorkspace(workspace);
+    // Workspace resolution (including the empty-directory downgrade) is owned
+    // by the client; the callback keeps the prompt variant tied to the cwd the
+    // CLI actually gets.
     return claudeCodeCompletion({
       model: claudeModel,
-      system: buildClaudeCodeSystemPrompt(system, effectiveWorkspace),
+      system: (resolvedWorkspace) => buildClaudeCodeSystemPrompt(system, resolvedWorkspace),
       messages,
-      workspace: effectiveWorkspace,
+      workspace,
     });
   }
 

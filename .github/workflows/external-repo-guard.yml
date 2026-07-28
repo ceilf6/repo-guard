@@ -21,7 +21,10 @@ concurrency:
 jobs:
   external-guard:
     runs-on: ${{ vars.EXTERNAL_REPO_GUARD_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 60
+    # Worst case is EXTERNAL_REPO_GUARD_MAX_REVIEWS (3) claude-code reviews at
+    # 20 minutes each plus search/post overhead; headroom avoids a kill window
+    # between a posted review and its dedup marker.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:

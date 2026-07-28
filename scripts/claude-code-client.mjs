@@ -162,6 +162,9 @@ export async function claudeCodeCompletion({
   maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
 }) {
   const resolvedWorkspace = resolveClaudeCodeWorkspace(workspace);
+  // A system-prompt function sees the resolved workspace ('' when the run is
+  // prompt-only), so callers cannot claim a checkout the CLI does not have.
+  const systemPrompt = typeof system === 'function' ? system(resolvedWorkspace) : system;
 
   const prompt = (messages || [])
     .map((message) => message?.content)
@@ -179,7 +182,7 @@ export async function claudeCodeCompletion({
   try {
     const stdout = await runClaudeCode({
       executable,
-      args: buildClaudeCodeArgs({ model, system }),
+      args: buildClaudeCodeArgs({ model, system: systemPrompt }),
       prompt,
       cwd: resolvedWorkspace || scratch,
       timeoutMs: timeoutMinutes * 60_000,
