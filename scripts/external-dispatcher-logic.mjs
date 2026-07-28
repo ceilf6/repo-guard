@@ -1,27 +1,17 @@
 // @ts-check
 import { isRepoGuardPublishedComment } from './review-logic.mjs';
-import { parseReviewEngine } from './review-engine.mjs';
-import { parseProviderOrder } from './openrouter-provider-routing.mjs';
-import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
+import { parseLLMConnectionEnv } from './review-engine.mjs';
 
 export const DEFAULT_EXTERNAL_TRIGGER = '@ceilf6/repo-guard';
 export const DEFAULT_EXTERNAL_ACTOR = 'ceilf6';
 
 export function buildExternalDispatcherConfig(env) {
   return {
+    ...parseLLMConnectionEnv(env),
     githubToken: env.CEILF6_GITHUB_TOKEN,
-    engine: parseReviewEngine(env.REVIEW_ENGINE),
-    provider: env.LLM_PROVIDER || 'openai',
-    model: env.LLM_MODEL || 'gpt-4o',
-    claudeModel: env.CLAUDE_CODE_MODEL || '',
     // External repository code is never checked out, so claude-code always
     // runs prompt-only from a scratch directory.
     workspace: '',
-    apiKey: env.LLM_API_KEY,
-    baseURL: env.LLM_BASE_URL || '',
-    structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
-    providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
-    extraInstructions: env.EXTRA_INSTRUCTIONS || '',
     trigger: env.EXTERNAL_REPO_GUARD_TRIGGER || DEFAULT_EXTERNAL_TRIGGER,
     actor: env.EXTERNAL_REPO_GUARD_TRIGGER_ACTOR || DEFAULT_EXTERNAL_ACTOR,
     maxReviews: parseMaxReviews(env.EXTERNAL_REPO_GUARD_MAX_REVIEWS, 3),

@@ -1,8 +1,27 @@
 // @ts-check
 import { chatCompletion } from './llm-client.mjs';
 import { claudeCodeCompletion } from './claude-code-client.mjs';
+import { parseProviderOrder } from './openrouter-provider-routing.mjs';
+import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
 
 export const REVIEW_ENGINES = ['api', 'claude-code'];
+
+// Single owner of the LLM connection env contract: both the action's review
+// config and the external dispatcher's config spread this, so an engine field
+// added here reaches every trigger path.
+export function parseLLMConnectionEnv(env) {
+  return {
+    engine: parseReviewEngine(env.REVIEW_ENGINE),
+    provider: env.LLM_PROVIDER || 'openai',
+    model: env.LLM_MODEL || 'gpt-4o',
+    claudeModel: env.CLAUDE_CODE_MODEL || '',
+    apiKey: env.LLM_API_KEY,
+    baseURL: env.LLM_BASE_URL || '',
+    structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
+    providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
+    extraInstructions: env.EXTRA_INSTRUCTIONS || '',
+  };
+}
 
 export function parseReviewEngine(value) {
   const normalized = String(value ?? '').trim().toLowerCase() || 'api';

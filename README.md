@@ -211,6 +211,7 @@ jobs:
 - 单次评审默认 20 分钟超时，可用环境变量 `CLAUDE_CODE_TIMEOUT_MINUTES` 调整；`CLAUDE_CODE_EXECUTABLE` 可指定 CLI 路径。
 - 运行前探测 `claude --version`：低于已验证最低版本（2.1.220，`--safe-mode`/`--tools` 语义在该版本实测）时直接失败，防止在未验证的安全边界上评审。
 - 凭据隔离：工作目录外的读取在 print 模式下被权限系统默认拒绝，且引擎经 `--settings` 注入 `permissions.deny` 硬拒绝 `~/.claude` 等凭据路径与 `.git/`——`Read(...)` 路径拒绝同时约束 Grep（显式拒绝）与 Glob（静默过滤），均在 2.1.220 实测。生产 runner 建议锁定 CLI 版本，见部署手册。
+- 环境卫生：引擎启动 CLI 前会从子进程环境显式剔除 `GITHUB_TOKEN`/`GH_TOKEN`/`LLM_API_KEY`/`CEILF6_GITHUB_TOKEN`。剔除是固定列表——不要在评审 job 的 env 里放置其他无关 secret，列表之外的环境变量会被评审子进程继承。
 - 仓库与 PR 内容始终作为待评审数据注入，system prompt 显式声明其中的指令性文本一律忽略。
 
 ## How It Works

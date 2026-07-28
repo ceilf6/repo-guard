@@ -9,24 +9,14 @@ import {
   renderStructuredIssueReviewV2,
   renderStructuredPRReviewV2,
 } from './review-contracts.mjs';
-import { parseReviewEngine } from './review-engine.mjs';
-import { parseProviderOrder } from './openrouter-provider-routing.mjs';
-import { parseStructuredOutputMode } from './openrouter-structured-output.mjs';
+import { parseLLMConnectionEnv } from './review-engine.mjs';
 
 export function buildReviewConfig(env) {
   return {
+    ...parseLLMConnectionEnv(env),
     type: env.REVIEW_TYPE || 'both',
-    engine: parseReviewEngine(env.REVIEW_ENGINE),
-    provider: env.LLM_PROVIDER || 'openai',
-    model: env.LLM_MODEL || 'gpt-4o',
-    claudeModel: env.CLAUDE_CODE_MODEL || '',
     workspace: env.REVIEW_WORKSPACE || '',
-    apiKey: env.LLM_API_KEY,
-    baseURL: env.LLM_BASE_URL || '',
-    structuredOutput: parseStructuredOutputMode(env.LLM_STRUCTURED_OUTPUT),
-    providerOrder: parseProviderOrder(env.LLM_PROVIDER_ORDER),
     githubToken: env.GITHUB_TOKEN,
-    extraInstructions: env.EXTRA_INSTRUCTIONS || '',
     prNumber: env.PR_NUMBER,
     issueNumber: env.ISSUE_NUMBER,
     repo: env.REPO_FULL_NAME,
