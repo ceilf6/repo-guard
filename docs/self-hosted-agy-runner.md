@@ -46,7 +46,18 @@ REG_TOKEN=$(gh api -X POST repos/<owner>/<repo>/actions/runners/registration-tok
   --replace
 
 ./svc.sh install
-./svc.sh start
+# 关键（macOS Keychain 与代理）：
+# actions/runner 生成的 plist 默认带 <key>SessionCreate</key><true/>，会将进程放入独立
+# 安全会话导致无法读取登录钥匙串里的 agy OAuth 凭据（报 authentication required）。
+PLIST=~/Library/LaunchAgents/actions.runner.<owner>-<repo>.mac-agy-<repo>.plist
+plutil -remove SessionCreate "$PLIST"
+plutil -replace EnvironmentVariables.HOME -string "$HOME" "$PLIST"
+# 若本机访问 Google 需走本地代理（如 127.0.0.1:7897），同步写入 plist 与 runner .env：
+plutil -replace EnvironmentVariables.HTTPS_PROXY -string "http://127.0.0.1:7897" "$PLIST"
+plutil -replace EnvironmentVariables.HTTP_PROXY -string "http://127.0.0.1:7897" "$PLIST"
+
+launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$PLIST"
 ```
 
 ## 仓库变量配置
