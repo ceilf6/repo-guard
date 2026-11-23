@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   REVIEW_ENGINES,
+  buildAgySystemPrompt,
   buildClaudeCodeSystemPrompt,
   completeReview,
   parseReviewEngine,
@@ -15,15 +16,27 @@ test('parseReviewEngine defaults to api and normalizes casing', () => {
   assert.equal(parseReviewEngine(''), 'api');
   assert.equal(parseReviewEngine('  API '), 'api');
   assert.equal(parseReviewEngine('Claude-Code'), 'claude-code');
+  assert.equal(parseReviewEngine(' AGY '), 'agy');
 });
 
 test('parseReviewEngine rejects unknown engines', () => {
-  assert.throws(() => parseReviewEngine('claude'), /REVIEW_ENGINE must be one of: api, claude-code \(got "claude"\)/);
+  assert.throws(() => parseReviewEngine('claude'), /REVIEW_ENGINE must be one of: api, claude-code, agy \(got "claude"\)/);
   assert.throws(() => parseReviewEngine('openai'), /got "openai"/);
 });
 
 test('REVIEW_ENGINES lists the public contract', () => {
-  assert.deepEqual(REVIEW_ENGINES, ['api', 'claude-code']);
+  assert.deepEqual(REVIEW_ENGINES, ['api', 'claude-code', 'agy']);
+});
+
+test('buildAgySystemPrompt switches between sandboxed-workspace and prompt-only instructions', () => {
+  const withWorkspace = buildAgySystemPrompt('BASE', '/tmp/staged');
+  assert.match(withWorkspace, /^BASE/);
+  assert.match(withWorkspace, /只读沙盒副本/);
+  assert.match(withWorkspace, /相对路径/);
+
+  const withoutWorkspace = buildAgySystemPrompt('BASE', '');
+  assert.match(withoutWorkspace, /上下文边界/);
+  assert.ok(!withoutWorkspace.includes('只读沙盒副本'));
 });
 
 test('buildClaudeCodeSystemPrompt picks the workspace instruction when a checkout exists', () => {
@@ -138,5 +151,49 @@ process.stdin.on('end', () => {
     }
     rmSync(stubDir, { recursive: true, force: true });
     rmSync(emptyWorkspace, { recursive: true, force: true });
+  }
+});
+
+test('completeReview routes agy engine with default claude-opus-5-5-high model', async () => {
+  const stubDir = mkdtempSync(join(tmpdir(), 'repo-guard-agy-engine-'));
+  const wsDir = mkdtempSync(join(tmpdir(), 'repo-guard-agy-ws-'));
+  const previousExecutable = process.env.AGY_EXECUTABLE;
+  try {
+    writeFileSync(join(wsDir, 'file.js'), 'export default 1;\n');
+    const stub = join(stubDir, 'agy-stub.mjs');
+    writeFileSync(stub, `#!/usr/bin/env node
+if (process.argv.includes('--version')) {
+  process.stdout.write('1.5.15\\n');
+  process.exit(0);
+}
+let input = '';
+process.stdin.on('data', (chunk) => { input += chunk; });
+process.stdin.on('end', () => {
+  const event = JSON.parse(input.trim());
+  const out = JSON.stringify({ args: process.argv.slice(2), content: event.message.content });
+  process.stdout.write(JSON.stringify({ event: 'result', result: { status: 'SUCCESS', response: out } }) + '\\n');
+});
+`);
+    chmodSync(stub, 0o755);
+    process.env.AGY_EXECUTABLE = stub;
+
+    const result = await completeReview({
+      engine: 'agy',
+      agyModel: '',
+      system: '评审规范',
+      messages: [{ role: 'user', content: 'PR diff' }],
+      workspace: wsDir,
+    });
+
+    const echoed = JSON.parse(result);
+    const modelIndex = echoed.args.indexOf('--model');
+    assert.equal(echoed.args[modelIndex + 1], 'claude-opus-5-5-high');
+    assert.match(echoed.content, /只读沙盒副本/);
+    assert.match(echoed.content, /PR diff/);
+  } finally {
+    if (previousExecutable === undefined) delete process.env.AGY_EXECUTABLE;
+    else process.env.AGY_EXECUTABLE = previousExecutable;
+    rmSync(stubDir, { recursive: true, force: true });
+    rmSync(wsDir, { recursive: true, force: true });
   }
 });

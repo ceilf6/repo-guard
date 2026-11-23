@@ -32,6 +32,7 @@ export async function buildPRReview(config) {
     provider: config.provider,
     model: config.model,
     claudeModel: config.claudeModel,
+    agyModel: config.agyModel,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutputMode: config.structuredOutput,

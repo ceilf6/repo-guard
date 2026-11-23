@@ -35,13 +35,20 @@ test('validateExternalDispatcherConfig requires an api key only for non-dry-run 
   assert.deepEqual(
     validateExternalDispatcherConfig(buildExternalDispatcherConfig({
       CEILF6_GITHUB_TOKEN: 'gh-token',
+      REVIEW_ENGINE: 'agy',
+    })),
+    [],
+  );
+  assert.deepEqual(
+    validateExternalDispatcherConfig(buildExternalDispatcherConfig({
+      CEILF6_GITHUB_TOKEN: 'gh-token',
       DRY_RUN: 'true',
     })),
     [],
   );
   assert.deepEqual(
     validateExternalDispatcherConfig(buildExternalDispatcherConfig({ CEILF6_GITHUB_TOKEN: 'gh-token' })),
-    ['LLM_API_KEY is required unless DRY_RUN=true or engine is claude-code'],
+    ['LLM_API_KEY is required unless DRY_RUN=true or engine is claude-code or agy'],
   );
   assert.deepEqual(
     validateExternalDispatcherConfig(buildExternalDispatcherConfig({ REVIEW_ENGINE: 'claude-code' })),

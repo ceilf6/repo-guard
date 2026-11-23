@@ -54,6 +54,7 @@ async function main() {
         provider: config.provider,
         model: config.model,
         claudeModel: config.claudeModel,
+        agyModel: config.agyModel,
         workspace: config.workspace,
         apiKey: config.apiKey,
         baseURL: config.baseURL,

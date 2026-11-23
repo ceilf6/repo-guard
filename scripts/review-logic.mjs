@@ -9,7 +9,7 @@ import {
   renderStructuredIssueReviewV2,
   renderStructuredPRReviewV2,
 } from './review-contracts.mjs';
-import { parseLLMConnectionEnv } from './review-engine.mjs';
+import { isLocalCliEngine, parseLLMConnectionEnv } from './review-engine.mjs';
 
 export function buildReviewConfig(env) {
   return {
@@ -30,8 +30,8 @@ export function buildReviewConfig(env) {
 
 export function validateReviewConfig(config) {
   const errors = [];
-  if (config.engine !== 'claude-code' && !config.apiKey) {
-    errors.push('LLM_API_KEY is required unless engine is claude-code');
+  if (!isLocalCliEngine(config.engine) && !config.apiKey) {
+    errors.push('LLM_API_KEY is required unless engine is claude-code or agy');
   }
   if (!config.githubToken) {
     errors.push('GITHUB_TOKEN is required');

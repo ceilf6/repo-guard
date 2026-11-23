@@ -15,7 +15,7 @@ import {
   validateReviewConfig,
 } from '../scripts/review-logic.mjs';
 
-test('buildReviewConfig wires the claude-code engine fields from env', () => {
+test('buildReviewConfig wires local CLI engine fields from env', () => {
   const config = buildReviewConfig({
     REVIEW_ENGINE: 'claude-code',
     REVIEW_WORKSPACE: '/srv/pr-head',
@@ -26,6 +26,15 @@ test('buildReviewConfig wires the claude-code engine fields from env', () => {
   assert.equal(config.workspace, '/srv/pr-head');
   assert.equal(config.claudeModel, 'opus');
   assert.equal(config.githubToken, 'gh-token');
+
+  const agyConfig = buildReviewConfig({
+    REVIEW_ENGINE: 'agy',
+    REVIEW_WORKSPACE: '/srv/pr-head',
+    AGY_MODEL: 'claude-opus-5-5-high',
+    GITHUB_TOKEN: 'gh-token',
+  });
+  assert.equal(agyConfig.engine, 'agy');
+  assert.equal(agyConfig.agyModel, 'claude-opus-5-5-high');
 });
 
 test('buildReviewConfig keeps api-engine defaults unchanged', () => {
@@ -35,6 +44,7 @@ test('buildReviewConfig keeps api-engine defaults unchanged', () => {
   assert.equal(config.model, 'gpt-4o');
   assert.equal(config.workspace, '');
   assert.equal(config.claudeModel, '');
+  assert.equal(config.agyModel, '');
 });
 
 test('validateReviewConfig requires an api key only for the api engine', () => {
@@ -43,8 +53,12 @@ test('validateReviewConfig requires an api key only for the api engine', () => {
     [],
   );
   assert.deepEqual(
+    validateReviewConfig(buildReviewConfig({ REVIEW_ENGINE: 'agy', GITHUB_TOKEN: 'gh-token' })),
+    [],
+  );
+  assert.deepEqual(
     validateReviewConfig(buildReviewConfig({ GITHUB_TOKEN: 'gh-token' })),
-    ['LLM_API_KEY is required unless engine is claude-code'],
+    ['LLM_API_KEY is required unless engine is claude-code or agy'],
   );
 });
 
@@ -53,8 +67,12 @@ test('validateReviewConfig always requires the GitHub token', () => {
     validateReviewConfig(buildReviewConfig({ REVIEW_ENGINE: 'claude-code' })),
     ['GITHUB_TOKEN is required'],
   );
+  assert.deepEqual(
+    validateReviewConfig(buildReviewConfig({ REVIEW_ENGINE: 'agy' })),
+    ['GITHUB_TOKEN is required'],
+  );
   assert.deepEqual(validateReviewConfig(buildReviewConfig({})), [
-    'LLM_API_KEY is required unless engine is claude-code',
+    'LLM_API_KEY is required unless engine is claude-code or agy',
     'GITHUB_TOKEN is required',
   ]);
 });

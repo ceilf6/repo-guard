@@ -30,7 +30,7 @@ repo-guard 是为这个闭环造的 CR 环节：输出稳定的结论契约与�
 
 - PR: Automated code review with cascade analysis, Karpathy review standard, inline comments
 - Issue: Quality assessment with completeness, clarity, actionability scoring
-- Two engines: `api` (OpenAI-compatible / Anthropic HTTP APIs) and `claude-code` (local Claude Code CLI on your own runner, with read-only repository exploration)
+- Three engines: `api` (OpenAI-compatible / Anthropic HTTP APIs), `claude-code` (local Claude Code CLI), and `agy` (local Antigravity CLI `agy`, defaulting to `claude-opus-5-5-high`, with read-only sandboxed repository exploration)
 - Works with relay/proxy services via custom base URL
 - Configurable model and extra instructions
 - Chinese review prompts and Chinese output contracts by default
@@ -89,12 +89,13 @@ jobs:
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `type` | No | `both` | `pr`, `issue`, or `both` (auto-detect) |
-| `engine` | No | `api` | `api` calls an LLM HTTP API; `claude-code` runs the local Claude Code CLI |
+| `engine` | No | `api` | `api` calls an LLM HTTP API; `claude-code` runs local Claude Code CLI; `agy` runs local Antigravity CLI |
 | `provider` | No | `openai` | `openai` or `anthropic` (api engine) |
 | `model` | No | `gpt-4o` | Model name (api engine) |
 | `claude-model` | No | `""` | Model for the claude-code engine (`opus`, `sonnet`, or a full name); empty uses the CLI default |
-| `workspace` | No | `github.workspace` | Directory the claude-code engine explores with read-only tools |
-| `api-key` | api engine | `""` | LLM API key; unused by the claude-code engine |
+| `agy-model` | No | `""` | Model slug for the agy engine; empty defaults to `claude-opus-5-5-high` |
+| `workspace` | No | `github.workspace` | Directory local CLI engines (`claude-code`, `agy`) explore with read-only tools |
+| `api-key` | api engine | `""` | LLM API key; unused by `claude-code` and `agy` |
 | `base-url` | No | `""` | Custom API base URL |
 | `structured-output` | No | `auto` | OpenRouter Structured Outputs mode: `off` or `auto` |
 | `provider-order` | No | `""` | Comma-separated OpenRouter upstream provider order, e.g. `azure` |
@@ -213,6 +214,28 @@ jobs:
 - 凭据隔离：工作目录外的读取在 print 模式下被权限系统默认拒绝，且引擎经 `--settings` 注入 `permissions.deny` 硬拒绝 `~/.claude` 等凭据路径与 `.git/`——`Read(...)` 路径拒绝同时约束 Grep（显式拒绝）与 Glob（静默过滤），均在 2.1.220 实测。生产 runner 建议锁定 CLI 版本，见部署手册。
 - 环境卫生：引擎启动 CLI 前会从子进程环境显式剔除 `GITHUB_TOKEN`/`GH_TOKEN`/`LLM_API_KEY`/`CEILF6_GITHUB_TOKEN`。剔除是固定列表——不要在评审 job 的 env 里放置其他无关 secret，列表之外的环境变量会被评审子进程继承。
 - 仓库与 PR 内容始终作为待评审数据注入，system prompt 显式声明其中的指令性文本一律忽略。
+
+## Engine: agy（自托管 Antigravity CLI）
+
+`engine: agy` 在本机 self-hosted runner 上运行已认证的 Antigravity CLI（`agy`），默认采用 `claude-opus-5-5-high`，仓库无需配置 `LLM_API_KEY`。
+
+引擎将待审 checkout 复制为临时只读副本（剔除 `.git`、`.agents`、`GEMINI.md`、`AGENTS.md` 等项目配置并跳过符号链接，防止 Hook/规则注入与路径穿越），同时开启 OS 终端沙盒（`--sandbox`）与单次内联 `--settings` 硬拦截写入、越狱执行、外网访问与主目录凭据读取。部署指南见 [docs/self-hosted-agy-runner.md](docs/self-hosted-agy-runner.md)。
+
+```yaml
+jobs:
+  guard:
+    runs-on: [self-hosted, repo-guard-agy]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: ceilf6/repo-guard@main
+        with:
+          engine: agy
+          agy-model: claude-opus-5-5-high
+```
 
 ## How It Works
 

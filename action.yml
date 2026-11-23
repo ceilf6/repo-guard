@@ -10,7 +10,7 @@ inputs:
     required: false
     default: "both"
   engine:
-    description: "Review engine: 'api' calls an LLM HTTP API, 'claude-code' runs the local Claude Code CLI (requires a runner with an authenticated `claude` binary, typically self-hosted)"
+    description: "Review engine: 'api' calls an LLM HTTP API, 'claude-code' runs local Claude Code CLI, 'agy' runs local Antigravity CLI (`agy`)"
     required: false
     default: "api"
   provider:
@@ -25,12 +25,16 @@ inputs:
     description: "Model for the claude-code engine (alias like 'opus' or a full model name); empty uses the CLI's configured default"
     required: false
     default: ""
+  agy-model:
+    description: "Model slug for the agy engine (e.g., claude-opus-5-5-high); empty defaults to claude-opus-5-5-high"
+    required: false
+    default: ""
   workspace:
-    description: "Directory the claude-code engine explores with read-only tools; point it at a checkout of the PR head for full-repo review context"
+    description: "Directory local CLI engines (claude-code, agy) explore with read-only tools; point it at a checkout of the PR head for full-repo review context"
     required: false
     default: ${{ github.workspace }}
   api-key:
-    description: "API key for the LLM provider (required for the api engine, unused by claude-code)"
+    description: "API key for the LLM provider (required for the api engine, unused by claude-code and agy)"
     required: false
     default: ""
   base-url:
@@ -72,6 +76,7 @@ runs:
         REVIEW_ENGINE: ${{ inputs.engine }}
         REVIEW_WORKSPACE: ${{ inputs.workspace }}
         CLAUDE_CODE_MODEL: ${{ inputs.claude-model }}
+        AGY_MODEL: ${{ inputs.agy-model }}
         LLM_PROVIDER: ${{ inputs.provider }}
         LLM_MODEL: ${{ inputs.model }}
         LLM_API_KEY: ${{ inputs.api-key }}

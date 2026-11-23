@@ -1,6 +1,6 @@
 // @ts-check
 import { isRepoGuardPublishedComment } from './review-logic.mjs';
-import { parseLLMConnectionEnv } from './review-engine.mjs';
+import { isLocalCliEngine, parseLLMConnectionEnv } from './review-engine.mjs';
 
 export const DEFAULT_EXTERNAL_TRIGGER = '@ceilf6/repo-guard';
 export const DEFAULT_EXTERNAL_ACTOR = 'ceilf6';
@@ -9,8 +9,8 @@ export function buildExternalDispatcherConfig(env) {
   return {
     ...parseLLMConnectionEnv(env),
     githubToken: env.CEILF6_GITHUB_TOKEN,
-    // External repository code is never checked out, so claude-code always
-    // runs prompt-only from a scratch directory.
+    // External repository code is never checked out, so local CLI engines always
+    // run prompt-only from an empty scratch directory.
     workspace: '',
     trigger: env.EXTERNAL_REPO_GUARD_TRIGGER || DEFAULT_EXTERNAL_TRIGGER,
     actor: env.EXTERNAL_REPO_GUARD_TRIGGER_ACTOR || DEFAULT_EXTERNAL_ACTOR,
@@ -26,8 +26,8 @@ export function validateExternalDispatcherConfig(config) {
   if (!config.githubToken) {
     errors.push('CEILF6_GITHUB_TOKEN is required');
   }
-  if (!config.dryRun && config.engine !== 'claude-code' && !config.apiKey) {
-    errors.push('LLM_API_KEY is required unless DRY_RUN=true or engine is claude-code');
+  if (!config.dryRun && !isLocalCliEngine(config.engine) && !config.apiKey) {
+    errors.push('LLM_API_KEY is required unless DRY_RUN=true or engine is claude-code or agy');
   }
   return errors;
 }

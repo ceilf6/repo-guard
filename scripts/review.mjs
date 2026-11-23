@@ -1,4 +1,5 @@
 // @ts-check
+import { DEFAULT_AGY_MODEL } from './agy-client.mjs';
 import { completeReview } from './review-engine.mjs';
 import { fetchIssue, postComment, postPRReview } from './github-api.mjs';
 import { loadSystemPrompt, buildIssueUserMessage } from './prompts.mjs';
@@ -47,6 +48,8 @@ async function main() {
   console.log(`在 ${config.repo} 上运行 ${reviewType} 评审...`);
   if (config.engine === 'claude-code') {
     console.log(`引擎: claude-code, 模型: ${config.claudeModel || '(CLI 默认)'}, 工作目录: ${config.workspace || '(无 checkout)'}`);
+  } else if (config.engine === 'agy') {
+    console.log(`引擎: agy, 模型: ${config.agyModel || DEFAULT_AGY_MODEL}, 工作目录: ${config.workspace || '(无 checkout)'}`);
   } else {
     console.log(`供应商: ${config.provider}, 模型: ${config.model}`);
   }
@@ -72,6 +75,7 @@ async function reviewPR(prNumber) {
     provider: config.provider,
     model: config.model,
     claudeModel: config.claudeModel,
+    agyModel: config.agyModel,
     workspace: config.workspace,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
@@ -115,6 +119,7 @@ async function reviewIssue(issueNumber) {
     provider: config.provider,
     model: config.model,
     claudeModel: config.claudeModel,
+    agyModel: config.agyModel,
     apiKey: config.apiKey,
     baseURL: config.baseURL,
     structuredOutputMode: config.structuredOutput,

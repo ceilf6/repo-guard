@@ -43,6 +43,7 @@ jobs:
           CEILF6_GITHUB_TOKEN: ${{ secrets.CEILF6_GITHUB_TOKEN }}
           REVIEW_ENGINE: ${{ vars.EXTERNAL_REPO_GUARD_ENGINE || 'api' }}
           CLAUDE_CODE_MODEL: ${{ vars.CLAUDE_CODE_MODEL }}
+          AGY_MODEL: ${{ vars.AGY_MODEL }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'anthropic' }}
           LLM_MODEL: ${{ vars.LLM_MODEL || 'claude-opus-4-7-thinking' }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
