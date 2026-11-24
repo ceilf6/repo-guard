@@ -1,25 +1,29 @@
 // @ts-check
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 // Review runs treat repository and PR content as untrusted input, so the CLI
 // only gets repository lookup tools: no mutation, no Bash, no network egress.
 export const CLAUDE_CODE_READONLY_TOOLS = 'Read,Grep,Glob';
 
-// Reads outside the working directory are already auto-denied in print mode
-// (verified on 2.1.220: the attempt lands in permission_denials, content never
-// read). These deny rules are defense in depth for the runner user's own
-// credentials and the checkout's .git metadata; --settings is honored under
-// --safe-mode (also verified on 2.1.220).
+// Force defaultMode='default' so a runner user's global ~/.claude/settings.json
+// with permissions.defaultMode='auto' cannot auto-approve reads outside cwd
+// (verified on 2.1.330). Deny rules provide defense in depth for runner-user
+// credentials and the checkout's .git metadata.
 export const CLAUDE_CODE_PERMISSION_SETTINGS = JSON.stringify({
   permissions: {
+    defaultMode: 'default',
     deny: [
       'Read(~/.claude/**)',
       'Read(~/.claude.json)',
       'Read(~/.claude.json.backup)',
       'Read(~/.config/claude/**)',
+      'Read(~/.ssh/**)',
+      'Read(~/.gemini/**)',
+      'Read(~/.aws/**)',
+      'Read(~/.gnupg/**)',
       'Read(./.git/**)',
     ],
   },
@@ -205,6 +209,11 @@ function runClaudeCode({ executable, args, prompt, cwd, timeoutMs, maxOutputByte
   return new Promise((resolve, reject) => {
     const childEnv = { ...process.env };
     for (const key of CLAUDE_CODE_ENV_DENYLIST) delete childEnv[key];
+    const localBin = join(homedir(), '.local', 'bin');
+    const currentPath = childEnv.PATH || '/usr/bin:/bin:/usr/sbin:/sbin';
+    if (!currentPath.split(':').includes(localBin)) {
+      childEnv.PATH = `${localBin}:/opt/homebrew/bin:/usr/local/bin:${currentPath}`;
+    }
 
     const child = spawn(executable, args, {
       cwd,

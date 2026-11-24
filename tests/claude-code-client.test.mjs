@@ -17,11 +17,14 @@ import {
   resolveClaudeCodeWorkspace,
 } from '../scripts/claude-code-client.mjs';
 
-test('CLAUDE_CODE_PERMISSION_SETTINGS hard-denies credential paths and .git', () => {
+test('CLAUDE_CODE_PERMISSION_SETTINGS resets defaultMode and hard-denies credential paths and .git', () => {
   const settings = JSON.parse(CLAUDE_CODE_PERMISSION_SETTINGS);
+  assert.equal(settings.permissions.defaultMode, 'default');
   const deny = settings.permissions.deny;
   assert.ok(deny.includes('Read(~/.claude/**)'));
   assert.ok(deny.includes('Read(~/.claude.json)'));
+  assert.ok(deny.includes('Read(~/.ssh/**)'));
+  assert.ok(deny.includes('Read(~/.gemini/**)'));
   assert.ok(deny.includes('Read(./.git/**)'));
 });
 
