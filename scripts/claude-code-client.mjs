@@ -207,7 +207,16 @@ export async function claudeCodeCompletion({
 
 function runClaudeCode({ executable, args, prompt, cwd, timeoutMs, maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES }) {
   return new Promise((resolve, reject) => {
-    const childEnv = { ...process.env };
+    const childEnv = {
+      ...process.env,
+      // Suppress background telemetry, feature-flag prefetches, and auto-update
+      // checks to anthropic.com so a flaky external proxy cannot stall startup
+      // when routing through a local relay such as cc-switch.
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+      DISABLE_AUTOUPDATER: '1',
+      DISABLE_TELEMETRY: '1',
+      DISABLE_ERROR_REPORTING: '1',
+    };
     for (const key of CLAUDE_CODE_ENV_DENYLIST) delete childEnv[key];
     const localBin = join(homedir(), '.local', 'bin');
     const currentPath = childEnv.PATH || '/usr/bin:/bin:/usr/sbin:/sbin';
