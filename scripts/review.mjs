@@ -1,6 +1,6 @@
 // @ts-check
 import { DEFAULT_AGY_MODEL } from './agy-client.mjs';
-import { completeReview } from './review-engine.mjs';
+import { completeReview, parseReviewEngineChain } from './review-engine.mjs';
 import { fetchIssue, postComment, postPRReview } from './github-api.mjs';
 import { loadSystemPrompt, buildIssueUserMessage } from './prompts.mjs';
 import { buildPRReview } from './pr-reviewer.mjs';
@@ -46,8 +46,15 @@ async function main() {
   }
 
   console.log(`在 ${config.repo} 上运行 ${reviewType} 评审...`);
-  if (config.engine === 'claude-code') {
+  const engineChain = parseReviewEngineChain(config.engine);
+  if (engineChain.length > 1) {
+    console.log(`引擎降级链: ${engineChain.join(' -> ')}, 工作目录: ${config.workspace || '(无 checkout)'}`);
+  } else if (config.engine === 'claude-code') {
     console.log(`引擎: claude-code, 模型: ${config.claudeModel || '(CLI 默认)'}, 工作目录: ${config.workspace || '(无 checkout)'}`);
+  } else if (config.engine === 'codex') {
+    console.log(`引擎: codex, 模型: ${config.codexModel || '(CLI 默认)'}, 工作目录: ${config.workspace || '(无 checkout)'}`);
+  } else if (config.engine === 'dsh') {
+    console.log(`引擎: dsh, 工作目录: ${config.workspace || '(无 checkout)'}`);
   } else if (config.engine === 'agy') {
     console.log(`引擎: agy, 模型: ${config.agyModel || DEFAULT_AGY_MODEL}, 工作目录: ${config.workspace || '(无 checkout)'}`);
   } else {
@@ -75,6 +82,7 @@ async function reviewPR(prNumber) {
     provider: config.provider,
     model: config.model,
     claudeModel: config.claudeModel,
+    codexModel: config.codexModel,
     agyModel: config.agyModel,
     workspace: config.workspace,
     apiKey: config.apiKey,
@@ -119,6 +127,7 @@ async function reviewIssue(issueNumber) {
     provider: config.provider,
     model: config.model,
     claudeModel: config.claudeModel,
+    codexModel: config.codexModel,
     agyModel: config.agyModel,
     apiKey: config.apiKey,
     baseURL: config.baseURL,

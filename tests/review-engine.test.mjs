@@ -8,24 +8,31 @@ import {
   buildAgySystemPrompt,
   buildClaudeCodeSystemPrompt,
   completeReview,
+  isLocalCliEngine,
   parseReviewEngine,
+  parseReviewEngineChain,
 } from '../scripts/review-engine.mjs';
 
-test('parseReviewEngine defaults to api and normalizes casing', () => {
+test('parseReviewEngine defaults to api, normalizes casing, and supports fallback chains', () => {
   assert.equal(parseReviewEngine(undefined), 'api');
   assert.equal(parseReviewEngine(''), 'api');
   assert.equal(parseReviewEngine('  API '), 'api');
   assert.equal(parseReviewEngine('Claude-Code'), 'claude-code');
   assert.equal(parseReviewEngine(' AGY '), 'agy');
+  assert.equal(parseReviewEngine('claude-code, codex, dsh'), 'claude-code,codex,dsh');
+  assert.deepEqual(parseReviewEngineChain('claude-code, codex, dsh'), ['claude-code', 'codex', 'dsh']);
+  assert.equal(isLocalCliEngine('claude-code,codex,dsh'), true);
+  assert.equal(isLocalCliEngine('claude-code,api'), false);
 });
 
-test('parseReviewEngine rejects unknown engines', () => {
-  assert.throws(() => parseReviewEngine('claude'), /REVIEW_ENGINE must be one of: api, claude-code, agy \(got "claude"\)/);
+test('parseReviewEngine rejects unknown or duplicate engines', () => {
+  assert.throws(() => parseReviewEngine('claude'), /REVIEW_ENGINE must be one of: api, claude-code, codex, dsh, agy/);
   assert.throws(() => parseReviewEngine('openai'), /got "openai"/);
+  assert.throws(() => parseReviewEngine('codex,codex'), /duplicate engine "codex"/);
 });
 
 test('REVIEW_ENGINES lists the public contract', () => {
-  assert.deepEqual(REVIEW_ENGINES, ['api', 'claude-code', 'agy']);
+  assert.deepEqual(REVIEW_ENGINES, ['api', 'claude-code', 'codex', 'dsh', 'agy']);
 });
 
 test('buildAgySystemPrompt switches between sandboxed-workspace and prompt-only instructions', () => {
@@ -195,5 +202,84 @@ process.stdin.on('end', () => {
     else process.env.AGY_EXECUTABLE = previousExecutable;
     rmSync(stubDir, { recursive: true, force: true });
     rmSync(wsDir, { recursive: true, force: true });
+  }
+});
+
+test('completeReview falls back across claude-code -> codex -> dsh when earlier engines hit quota limits', async () => {
+  const stubDir = mkdtempSync(join(tmpdir(), 'repo-guard-chain-'));
+  const prevClaude = process.env.CLAUDE_CODE_EXECUTABLE;
+  const prevCodex = process.env.CODEX_EXECUTABLE;
+  const prevDsh = process.env.DSH_EXECUTABLE;
+  const prevDsKey = process.env.DEEPSEEK_API_KEY;
+  try {
+    const claudeFailStub = join(stubDir, 'claude-fail.mjs');
+    writeFileSync(claudeFailStub, `#!/usr/bin/env node
+if (process.argv.includes('--version')) { process.stdout.write('2.1.330\\n'); process.exit(0); }
+process.stderr.write("You've hit your limit · resets 5pm");
+process.exit(1);
+`);
+    chmodSync(claudeFailStub, 0o755);
+
+    const codexFailStub = join(stubDir, 'codex-fail.mjs');
+    writeFileSync(codexFailStub, `#!/usr/bin/env node
+if (process.argv.includes('--version')) { process.stdout.write('codex-cli 0.171.0\\n'); process.exit(0); }
+process.stderr.write('429 usage limit reached');
+process.exit(1);
+`);
+    chmodSync(codexFailStub, 0o755);
+
+    const dshOkStub = join(stubDir, 'dsh-ok.mjs');
+    writeFileSync(dshOkStub, `#!/usr/bin/env node
+if (process.argv.includes('--version')) { process.stdout.write('0.2.2-rc.5\\n'); process.exit(0); }
+process.stdin.resume();
+process.stdin.on('end', () => {
+  process.stdout.write('## Issue 分析: Fallback\\n\\n**处理建议:** 批准');
+});
+`);
+    chmodSync(dshOkStub, 0o755);
+
+    process.env.CLAUDE_CODE_EXECUTABLE = claudeFailStub;
+    process.env.CODEX_EXECUTABLE = codexFailStub;
+    process.env.DSH_EXECUTABLE = dshOkStub;
+    process.env.DEEPSEEK_API_KEY = 'sk-test';
+
+    const result = await completeReview({
+      engine: 'claude-code,codex,dsh',
+      system: '评审规范',
+      messages: [{ role: 'user', content: '测试降级' }],
+      workspace: '',
+    });
+
+    assert.match(result, /## Issue 分析: Fallback/);
+
+    // Also verify combined failure diagnostic when all 3 fail.
+    const dshFailStub = join(stubDir, 'dsh-fail.mjs');
+    writeFileSync(dshFailStub, `#!/usr/bin/env node
+if (process.argv.includes('--version')) { process.stdout.write('0.2.2-rc.5\\n'); process.exit(0); }
+process.stderr.write('deepseek 503');
+process.exit(1);
+`);
+    chmodSync(dshFailStub, 0o755);
+    process.env.DSH_EXECUTABLE = dshFailStub;
+
+    await assert.rejects(
+      completeReview({
+        engine: 'claude-code,codex,dsh',
+        system: '评审规范',
+        messages: [{ role: 'user', content: '测试全挂' }],
+        workspace: '',
+      }),
+      /All review engines in fallback chain \(claude-code -> codex -> dsh\) failed.*hit your limit.*429 usage limit.*deepseek 503/,
+    );
+  } finally {
+    if (prevClaude === undefined) delete process.env.CLAUDE_CODE_EXECUTABLE;
+    else process.env.CLAUDE_CODE_EXECUTABLE = prevClaude;
+    if (prevCodex === undefined) delete process.env.CODEX_EXECUTABLE;
+    else process.env.CODEX_EXECUTABLE = prevCodex;
+    if (prevDsh === undefined) delete process.env.DSH_EXECUTABLE;
+    else process.env.DSH_EXECUTABLE = prevDsh;
+    if (prevDsKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = prevDsKey;
+    rmSync(stubDir, { recursive: true, force: true });
   }
 });

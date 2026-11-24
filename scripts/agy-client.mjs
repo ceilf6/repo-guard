@@ -37,6 +37,8 @@ export const AGY_STRIPPED_ENTRY_NAMES = new Set([
   '_agents',
   '_agent',
   '.claude',
+  '.codex',
+  '.dsh',
   'gemini.md',
   'agents.md',
   'claude.md',

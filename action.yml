@@ -10,7 +10,7 @@ inputs:
     required: false
     default: "both"
   engine:
-    description: "Review engine: 'api' calls an LLM HTTP API, 'claude-code' runs local Claude Code CLI, 'agy' runs local Antigravity CLI (`agy`)"
+    description: "Review engine or comma-separated fallback chain (e.g., 'claude-code,codex,dsh'). Supported: 'api', 'claude-code', 'codex', 'dsh', 'agy'"
     required: false
     default: "api"
   provider:
@@ -23,6 +23,10 @@ inputs:
     default: "gpt-4o"
   claude-model:
     description: "Model for the claude-code engine (alias like 'opus' or a full model name); empty uses the CLI's configured default"
+    required: false
+    default: ""
+  codex-model:
+    description: "Model for the codex engine; empty uses the CLI default"
     required: false
     default: ""
   agy-model:
@@ -77,6 +81,7 @@ runs:
         REVIEW_ENGINE: ${{ inputs.engine }}
         REVIEW_WORKSPACE: ${{ inputs.workspace }}
         CLAUDE_CODE_MODEL: ${{ inputs.claude-model }}
+        CODEX_MODEL: ${{ inputs.codex-model }}
         AGY_MODEL: ${{ inputs.agy-model }}
         LLM_PROVIDER: ${{ inputs.provider }}
         LLM_MODEL: ${{ inputs.model }}
