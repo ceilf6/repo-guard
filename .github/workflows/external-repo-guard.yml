@@ -40,6 +40,7 @@ jobs:
       - name: Run external dispatcher
         shell: bash
         env:
+          NODE_USE_ENV_PROXY: "1"
           CEILF6_GITHUB_TOKEN: ${{ secrets.CEILF6_GITHUB_TOKEN }}
           REVIEW_ENGINE: ${{ vars.EXTERNAL_REPO_GUARD_ENGINE || 'api' }}
           CLAUDE_CODE_MODEL: ${{ vars.CLAUDE_CODE_MODEL }}

@@ -363,7 +363,48 @@ test('fetchPRLinkedIssues continues with degraded warning on API failure', async
   }, 'token');
 
   assert.deepEqual(result.issues, []);
-  assert.equal(result.warnings.length, 2);
-  assert.match(result.warnings.join('\n'), /closing issues.*403/);
-  assert.match(result.warnings.join('\n'), /#14.*404/);
+    assert.equal(result.warnings.length, 2);
+    assert.match(result.warnings.join('\n'), /closing issues.*403/);
+    assert.match(result.warnings.join('\n'), /#14.*404/);
+});
+
+test('githubFetch retries transient network errors and 502/503/504 responses', async (t) => {
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) {
+      const err = new TypeError('fetch failed');
+      err.cause = { code: 'UND_ERR_CONNECT_TIMEOUT' };
+      throw err;
+    }
+    if (calls === 2) {
+      return new Response('bad gateway', { status: 502 });
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+
+  const res = await githubApi.githubFetch('https://api.github.com/zen', {}, [1, 1, 1]);
+  assert.equal(res.status, 200);
+  assert.equal(calls, 3);
+});
+
+test('githubFetch surfaces underlying cause code when retries are exhausted', async (t) => {
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  globalThis.fetch = async () => {
+    const err = new TypeError('fetch failed');
+    err.cause = { code: 'ECONNRESET' };
+    throw err;
+  };
+
+  await assert.rejects(
+    () => githubApi.githubFetch('https://api.github.com/zen', {}, [1, 1]),
+    /GitHub API request failed: fetch failed \(ECONNRESET\)/,
+  );
 });

@@ -6,6 +6,46 @@ const PAGE_SIZE = 100;
 const MAX_LINKED_ISSUES = 10;
 const MAX_LINKED_ISSUE_BODY_CHARS = 12000;
 const HEADER = '> 🛡️ [ceilf6/repo-guard](https://github.com/ceilf6/repo-guard)\n\n';
+const TRANSIENT_GITHUB_STATUSES = new Set([502, 503, 504]);
+const DEFAULT_RETRY_DELAYS_MS = [500, 1500, 3000];
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatFetchError(err) {
+  const base = err?.message || String(err);
+  const cause = err?.cause;
+  if (!cause) return base;
+  const causeDetail = cause.code || cause.message || String(cause);
+  return causeDetail && !base.includes(causeDetail) ? `${base} (${causeDetail})` : base;
+}
+
+export async function githubFetch(url, options = {}, retryDelaysMs = DEFAULT_RETRY_DELAYS_MS) {
+  let attempt = 0;
+  while (true) {
+    try {
+      const res = await globalThis.fetch(url, options);
+      if (TRANSIENT_GITHUB_STATUSES.has(res.status) && attempt < retryDelaysMs.length) {
+        const delayMs = retryDelaysMs[attempt++];
+        console.warn(`GitHub API HTTP ${res.status} on ${url}, retrying in ${delayMs}ms (${attempt}/${retryDelaysMs.length})...`);
+        await sleep(delayMs);
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (attempt < retryDelaysMs.length) {
+        const delayMs = retryDelaysMs[attempt++];
+        console.warn(`GitHub API network error (${formatFetchError(err)}) on ${url}, retrying in ${delayMs}ms (${attempt}/${retryDelaysMs.length})...`);
+        await sleep(delayMs);
+        continue;
+      }
+      const wrapped = new Error(`GitHub API request failed: ${formatFetchError(err)}`);
+      wrapped.cause = err;
+      throw wrapped;
+    }
+  }
+}
 
 function headers(token) {
   return {
@@ -29,7 +69,7 @@ export async function fetchAllPages(url, token, description) {
   while (true) {
     const separator = url.includes('?') ? '&' : '?';
     const pagedURL = `${url}${separator}per_page=${PAGE_SIZE}&page=${page}`;
-    const res = await fetch(pagedURL, {
+    const res = await githubFetch(pagedURL, {
       headers: headers(token),
     });
     if (!res.ok) throw new Error(`Failed to fetch ${description}: ${res.status}`);
@@ -50,7 +90,7 @@ export async function searchIssuesAndPullRequests(query, token, options = {}) {
   url.searchParams.set('q', query);
   url.searchParams.set('per_page', String(perPage));
 
-  const res = await fetch(String(url), {
+  const res = await githubFetch(String(url), {
     headers: headers(token),
   });
   if (!res.ok) throw new Error(`Failed to search issues and pull requests: ${res.status}`);
@@ -60,7 +100,7 @@ export async function searchIssuesAndPullRequests(query, token, options = {}) {
 }
 
 export async function fetchPRInfo(repo, prNumber, token) {
-  const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}`, {
+  const res = await githubFetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}`, {
     headers: headers(token),
   });
   if (!res.ok) throw new Error(`Failed to fetch PR info: ${res.status}`);
@@ -111,7 +151,7 @@ export async function fetchPRDiff(repo, prNumber, token) {
 }
 
 export async function fetchPRRawDiff(repo, prNumber, token) {
-  const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}`, {
+  const res = await githubFetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}`, {
     headers: { ...headers(token), Accept: 'application/vnd.github.diff' },
   });
   if (!res.ok) {
@@ -183,7 +223,7 @@ function stripDiffPathPrefix(raw) {
 }
 
 export async function fetchIssue(repo, issueNumber, token) {
-  const res = await fetch(`${GITHUB_API}/repos/${repo}/issues/${issueNumber}`, {
+  const res = await githubFetch(`${GITHUB_API}/repos/${repo}/issues/${issueNumber}`, {
     headers: headers(token),
   });
   if (!res.ok) throw new Error(`Failed to fetch issue: ${res.status}`);
@@ -281,7 +321,7 @@ query RepoGuardLinkedIssues($owner: String!, $name: String!, $number: Int!) {
     }
   }
 }`;
-  const res = await fetch(GITHUB_GRAPHQL_API, {
+  const res = await githubFetch(GITHUB_GRAPHQL_API, {
     method: 'POST',
     headers: jsonHeaders(token),
     body: JSON.stringify({ query, variables: { owner, name, number: Number(prNumber) } }),
@@ -353,7 +393,7 @@ function truncateIssueBody(issue) {
 
 export async function postComment(repo, number, body, token) {
   const markedBody = `${HEADER}${body}`;
-  const res = await fetch(`${GITHUB_API}/repos/${repo}/issues/${number}/comments`, {
+  const res = await githubFetch(`${GITHUB_API}/repos/${repo}/issues/${number}/comments`, {
     method: 'POST',
     headers: headers(token),
     body: JSON.stringify({ body: markedBody }),
@@ -369,7 +409,7 @@ export async function postPRReview(repo, prNumber, body, event, comments, token)
     comments: comments || [],
   };
 
-  const res = await fetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}/reviews`, {
+  const res = await githubFetch(`${GITHUB_API}/repos/${repo}/pulls/${prNumber}/reviews`, {
     method: 'POST',
     headers: headers(token),
     body: JSON.stringify(payload),
